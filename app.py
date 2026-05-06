@@ -289,7 +289,7 @@ long20 = top20.melt(
     id_vars="opp_label", value_vars=["Wins", "Losses"],
     var_name="Result", value_name="Count",
 )
-long20 = long20.merge(top20[["opp_label", "Games", "WinRate", "MyPicks", "OppPicks"]], on="opp_label")
+long20 = long20.merge(top20[["opp_label", "Games", "WinRate", "Wins", "Losses", "MyPicks", "OppPicks"]], on="opp_label")
 fig1 = px.bar(
     long20, x="opp_label", y="Count", color="Result",
     color_discrete_map={"Wins": "#2ecc71", "Losses": "#e74c3c"},
@@ -297,14 +297,14 @@ fig1 = px.bar(
     labels={"opp_label": "Opponent", "Count": "Games"},
     text_auto=True, barmode="stack",
     category_orders={"opp_label": top20["opp_label"].tolist()},
-    custom_data=["Games", "WinRate", "MyPicks", "OppPicks"],
+    custom_data=["Games", "WinRate", "Wins", "Losses", "MyPicks", "OppPicks"],
 )
 fig1.update_traces(
     hovertemplate=(
         "<b>%{x}</b><br>"
-        "%{fullData.name}: %{y}  |  Total: %{customdata[0]}  |  WR: %{customdata[1]}%<br>"
-        "<b>Your picks:</b> %{customdata[2]}<br>"
-        "<b>Their picks:</b> %{customdata[3]}"
+        "Wins %{customdata[2]}  |  Losses %{customdata[3]}  |  Total %{customdata[0]}  |  WR: %{customdata[1]}%<br>"
+        "<b>Your picks:</b> %{customdata[4]}<br>"
+        "<b>Their picks:</b> %{customdata[5]}"
         "<extra></extra>"
     )
 )
@@ -348,30 +348,28 @@ season_overview["MyPicks"] = season_overview["season"].map(
 season_overview["OppPicks"] = season_overview["season"].map(
     lambda s: char_picks_str(pm_filtered[pm_filtered["season"] == s]["opp_char_name"])
 )
-_sov_cd = season_overview[["WinRate", "MyPicks", "OppPicks"]].values
+_sov_cd = season_overview[["WinRate", "Wins", "Losses", "Games", "MyPicks", "OppPicks"]].values
 
 fig_sov = make_subplots(specs=[[{"secondary_y": True}]])
+_sov_ht = (
+    "<b>%{x}</b><br>"
+    "Wins %{customdata[1]}  |  Losses %{customdata[2]}  |  Total %{customdata[3]}  |  WR: %{customdata[0]}%<br>"
+    "<b>Your picks:</b> %{customdata[4]}<br>"
+    "<b>Their picks:</b> %{customdata[5]}<extra></extra>"
+)
 fig_sov.add_trace(go.Bar(
     x=season_overview["season"], y=season_overview["Wins"],
     name="Wins", marker_color="#2ecc71",
     text=season_overview["Wins"], textposition="inside",
     customdata=_sov_cd,
-    hovertemplate=(
-        "<b>%{x}</b><br>Wins: %{y}  |  WR: %{customdata[0]}%<br>"
-        "<b>Your picks:</b> %{customdata[1]}<br>"
-        "<b>Their picks:</b> %{customdata[2]}<extra></extra>"
-    ),
+    hovertemplate=_sov_ht,
 ), secondary_y=False)
 fig_sov.add_trace(go.Bar(
     x=season_overview["season"], y=season_overview["Losses"],
     name="Losses", marker_color="#e74c3c",
     text=season_overview["Losses"], textposition="inside",
     customdata=_sov_cd,
-    hovertemplate=(
-        "<b>%{x}</b><br>Losses: %{y}  |  WR: %{customdata[0]}%<br>"
-        "<b>Your picks:</b> %{customdata[1]}<br>"
-        "<b>Their picks:</b> %{customdata[2]}<extra></extra>"
-    ),
+    hovertemplate=_sov_ht,
 ), secondary_y=False)
 _sov_wr = season_overview[season_overview["Games"] >= 10]
 fig_sov.add_trace(go.Scatter(
@@ -432,22 +430,21 @@ def make_season_opp_chart(season_subset, subtitle):
         if df_rank.empty:
             continue
         og = f"rank{rank}"
-        _cd_w = df_rank[["opp_label", "Games", "WinRate", "Losses", "MyPicks", "OppPicks"]].values
-        _cd_l = df_rank[["opp_label", "Games", "WinRate", "Wins", "MyPicks", "OppPicks"]].values
+        _cd = df_rank[["opp_label", "Games", "WinRate", "Wins", "Losses", "MyPicks", "OppPicks"]].values
+        _ht = (
+            "<b>%{customdata[0]}</b><br>"
+            "%{x} #" + str(rank) + "<br>"
+            "Wins %{customdata[3]}  |  Losses %{customdata[4]}  |  Total %{customdata[1]}  |  WR: %{customdata[2]}%<br>"
+            "<b>Your picks:</b> %{customdata[5]}<br>"
+            "<b>Their picks:</b> %{customdata[6]}"
+            "<extra></extra>"
+        )
         fig.add_trace(go.Bar(
             name="Wins", x=df_rank["season"], y=df_rank["Wins"],
             marker_color="#2ecc71", legendgroup="Wins",
             showlegend=not wins_in_legend, offsetgroup=og,
-            customdata=_cd_w,
-            hovertemplate=(
-                "<b>%{x}</b> - Rank #" + str(rank) + "<br>"
-                "%{customdata[0]}<br>"
-                "Wins: %{y}  Losses: %{customdata[3]}<br>"
-                "Games: %{customdata[1]}  WR: %{customdata[2]}%<br>"
-                "<b>Your picks:</b> %{customdata[4]}<br>"
-                "<b>Their picks:</b> %{customdata[5]}"
-                "<extra></extra>"
-            ),
+            customdata=_cd,
+            hovertemplate=_ht,
         ))
         wins_in_legend = True
         fig.add_trace(go.Bar(
@@ -458,16 +455,8 @@ def make_season_opp_chart(season_subset, subtitle):
             text=df_rank["opp_label"], textposition="outside",
             textangle=-90, textfont=dict(size=11),
             outsidetextfont=dict(size=11), constraintext="none", cliponaxis=False,
-            customdata=_cd_l,
-            hovertemplate=(
-                "<b>%{x}</b> - Rank #" + str(rank) + "<br>"
-                "%{customdata[0]}<br>"
-                "Wins: %{customdata[3]}  Losses: %{y}<br>"
-                "Games: %{customdata[1]}  WR: %{customdata[2]}%<br>"
-                "<b>Your picks:</b> %{customdata[4]}<br>"
-                "<b>Their picks:</b> %{customdata[5]}"
-                "<extra></extra>"
-            ),
+            customdata=_cd,
+            hovertemplate=_ht,
         ))
         losses_in_legend = True
 
