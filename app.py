@@ -373,11 +373,12 @@ fig_sov.add_trace(go.Bar(
         "<b>Their picks:</b> %{customdata[2]}<extra></extra>"
     ),
 ), secondary_y=False)
+_sov_wr = season_overview[season_overview["Games"] >= 10]
 fig_sov.add_trace(go.Scatter(
-    x=season_overview["season"], y=season_overview["WinRate"],
+    x=_sov_wr["season"], y=_sov_wr["WinRate"],
     name="Win Rate %", mode="lines+markers+text",
     line=dict(color="#3498db", width=2), marker=dict(size=8),
-    text=season_overview["WinRate"].astype(str) + "%", textposition="top center",
+    text=_sov_wr["WinRate"].astype(str) + "%", textposition="top center",
 ), secondary_y=True)
 fig_sov.update_layout(
     title=f"Season Overview - {player_label}",
