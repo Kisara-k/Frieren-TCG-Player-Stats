@@ -4,9 +4,6 @@ venv/
 ENV/
 .venv
 
-# Streamlit
-.streamlit/
-
 # Environment variables
 .env
 .env.local
