@@ -106,6 +106,42 @@ def matchup_stats(df, group_col="opp_label", top_n=None):
     return stats
 
 
+def _hex_to_hsl_capped(hex_color: str, max_l: int = 60) -> str:
+    """Convert hex color to hsl() CSS string with lightness capped at max_l."""
+    h = hex_color.lstrip("#")
+    r, g, b = int(h[0:2], 16) / 255, int(h[2:4], 16) / 255, int(h[4:6], 16) / 255
+    cmax, cmin = max(r, g, b), min(r, g, b)
+    delta = cmax - cmin
+    l = (cmax + cmin) / 2
+    s = 0.0 if delta == 0 else delta / (1 - abs(2 * l - 1))
+    if delta == 0:
+        hue = 0.0
+    elif cmax == r:
+        hue = 60 * (((g - b) / delta) % 6)
+    elif cmax == g:
+        hue = 60 * ((b - r) / delta + 2)
+    else:
+        hue = 60 * ((r - g) / delta + 4)
+    l_capped = min(l, max_l / 100)
+    if l > l_capped:
+        s = s * (l_capped / l)
+    return f"hsl({hue:.0f},{s * 100:.0f}%,{l_capped * 100:.0f}%)"
+
+
+def char_picks_str(df_col: pd.Series, top_n: int = 4) -> str:
+    """Return top-N character pick distribution as a colored HTML string for tooltips."""
+    counts = df_col.dropna().value_counts()
+    total = counts.sum()
+    if total == 0:
+        return "—"
+    parts = []
+    for c in counts.index[:top_n]:
+        color = _hex_to_hsl_capped(char_color_map.get(c, "#AAAAAA"))
+        pct = f"{counts[c] / total * 100:.0f}%"
+        parts.append(f'<span style="color:{color}"><b>{c}</b> {pct}</span>')
+    return "  ·  ".join(parts)
+
+
 # -- PLAYER SEARCH -------------------------------------------------------------
 st.title("Frieren TCG Player Stats")
 
@@ -242,12 +278,18 @@ season_label_matchup = season_display_label(season_sel_matchup)
 
 overall = matchup_stats(df_matchup)
 
-top20 = overall.head(20)
+top20 = overall.head(20).copy()
+top20["MyPicks"] = top20["opp_label"].map(
+    lambda o: char_picks_str(df_matchup[df_matchup["opp_label"] == o]["player_char_name"])
+)
+top20["OppPicks"] = top20["opp_label"].map(
+    lambda o: char_picks_str(df_matchup[df_matchup["opp_label"] == o]["opp_char_name"])
+)
 long20 = top20.melt(
     id_vars="opp_label", value_vars=["Wins", "Losses"],
     var_name="Result", value_name="Count",
 )
-long20 = long20.merge(top20[["opp_label", "Games", "WinRate"]], on="opp_label")
+long20 = long20.merge(top20[["opp_label", "Games", "WinRate", "MyPicks", "OppPicks"]], on="opp_label")
 fig1 = px.bar(
     long20, x="opp_label", y="Count", color="Result",
     color_discrete_map={"Wins": "#2ecc71", "Losses": "#e74c3c"},
@@ -255,10 +297,16 @@ fig1 = px.bar(
     labels={"opp_label": "Opponent", "Count": "Games"},
     text_auto=True, barmode="stack",
     category_orders={"opp_label": top20["opp_label"].tolist()},
-    custom_data=["Games", "WinRate"],
+    custom_data=["Games", "WinRate", "MyPicks", "OppPicks"],
 )
 fig1.update_traces(
-    hovertemplate="<b>%{x}</b><br>%{fullData.name}: %{y}<br>Total games: %{customdata[0]}  |  WR: %{customdata[1]}%<extra></extra>"
+    hovertemplate=(
+        "<b>%{x}</b><br>"
+        "%{fullData.name}: %{y}  |  Total: %{customdata[0]}  |  WR: %{customdata[1]}%<br>"
+        "<b>Your picks:</b> %{customdata[2]}<br>"
+        "<b>Their picks:</b> %{customdata[3]}"
+        "<extra></extra>"
+    )
 )
 fig1.update_layout(legend_title_text="Result")
 st.plotly_chart(fig1, use_container_width=True)
@@ -294,17 +342,36 @@ season_overview = season_overview.iloc[
     season_overview["season"].str[1:].astype(int).argsort()
 ].reset_index(drop=True)
 season_overview["WinRate"] = (season_overview["Wins"] / season_overview["Games"] * 100).round(1)
+season_overview["MyPicks"] = season_overview["season"].map(
+    lambda s: char_picks_str(pm_filtered[pm_filtered["season"] == s]["player_char_name"])
+)
+season_overview["OppPicks"] = season_overview["season"].map(
+    lambda s: char_picks_str(pm_filtered[pm_filtered["season"] == s]["opp_char_name"])
+)
+_sov_cd = season_overview[["WinRate", "MyPicks", "OppPicks"]].values
 
 fig_sov = make_subplots(specs=[[{"secondary_y": True}]])
 fig_sov.add_trace(go.Bar(
     x=season_overview["season"], y=season_overview["Wins"],
     name="Wins", marker_color="#2ecc71",
     text=season_overview["Wins"], textposition="inside",
+    customdata=_sov_cd,
+    hovertemplate=(
+        "<b>%{x}</b><br>Wins: %{y}  |  WR: %{customdata[0]}%<br>"
+        "<b>Your picks:</b> %{customdata[1]}<br>"
+        "<b>Their picks:</b> %{customdata[2]}<extra></extra>"
+    ),
 ), secondary_y=False)
 fig_sov.add_trace(go.Bar(
     x=season_overview["season"], y=season_overview["Losses"],
     name="Losses", marker_color="#e74c3c",
     text=season_overview["Losses"], textposition="inside",
+    customdata=_sov_cd,
+    hovertemplate=(
+        "<b>%{x}</b><br>Losses: %{y}  |  WR: %{customdata[0]}%<br>"
+        "<b>Your picks:</b> %{customdata[1]}<br>"
+        "<b>Their picks:</b> %{customdata[2]}<extra></extra>"
+    ),
 ), secondary_y=False)
 fig_sov.add_trace(go.Scatter(
     x=season_overview["season"], y=season_overview["WinRate"],
@@ -339,6 +406,15 @@ for season in seasons:
         })
 
 season_opp_df = pd.DataFrame(rows)
+_sopp_picks = (
+    pm_filtered.groupby(["season", "opp_label"])[["player_char_name", "opp_char_name"]]
+    .apply(lambda g: pd.Series({
+        "MyPicks": char_picks_str(g["player_char_name"]),
+        "OppPicks": char_picks_str(g["opp_char_name"]),
+    }))
+    .reset_index()
+)
+season_opp_df = season_opp_df.merge(_sopp_picks, on=["season", "opp_label"], how="left")
 mid = len(seasons) // 2
 season_splits = [seasons[:mid], seasons[mid:]]
 split_labels = ["(Early Seasons)", "(Late Seasons)"]
@@ -355,16 +431,21 @@ def make_season_opp_chart(season_subset, subtitle):
         if df_rank.empty:
             continue
         og = f"rank{rank}"
+        _cd_w = df_rank[["opp_label", "Games", "WinRate", "Losses", "MyPicks", "OppPicks"]].values
+        _cd_l = df_rank[["opp_label", "Games", "WinRate", "Wins", "MyPicks", "OppPicks"]].values
         fig.add_trace(go.Bar(
             name="Wins", x=df_rank["season"], y=df_rank["Wins"],
             marker_color="#2ecc71", legendgroup="Wins",
             showlegend=not wins_in_legend, offsetgroup=og,
-            customdata=df_rank[["opp_label", "Games", "WinRate", "Losses"]].values,
+            customdata=_cd_w,
             hovertemplate=(
                 "<b>%{x}</b> - Rank #" + str(rank) + "<br>"
                 "%{customdata[0]}<br>"
                 "Wins: %{y}  Losses: %{customdata[3]}<br>"
-                "Games: %{customdata[1]}  WR: %{customdata[2]}%<extra></extra>"
+                "Games: %{customdata[1]}  WR: %{customdata[2]}%<br>"
+                "<b>Your picks:</b> %{customdata[4]}<br>"
+                "<b>Their picks:</b> %{customdata[5]}"
+                "<extra></extra>"
             ),
         ))
         wins_in_legend = True
@@ -376,12 +457,15 @@ def make_season_opp_chart(season_subset, subtitle):
             text=df_rank["opp_label"], textposition="outside",
             textangle=-90, textfont=dict(size=11),
             outsidetextfont=dict(size=11), constraintext="none", cliponaxis=False,
-            customdata=df_rank[["opp_label", "Games", "WinRate", "Wins"]].values,
+            customdata=_cd_l,
             hovertemplate=(
                 "<b>%{x}</b> - Rank #" + str(rank) + "<br>"
                 "%{customdata[0]}<br>"
                 "Wins: %{customdata[3]}  Losses: %{y}<br>"
-                "Games: %{customdata[1]}  WR: %{customdata[2]}%<extra></extra>"
+                "Games: %{customdata[1]}  WR: %{customdata[2]}%<br>"
+                "<b>Your picks:</b> %{customdata[4]}<br>"
+                "<b>Their picks:</b> %{customdata[5]}"
+                "<extra></extra>"
             ),
         ))
         losses_in_legend = True
@@ -403,9 +487,15 @@ def make_season_opp_chart(season_subset, subtitle):
 
 col1, col2 = st.columns(2)
 with col1:
-    st.plotly_chart(make_season_opp_chart(season_splits[0], split_labels[0]), use_container_width=True)
+    st.plotly_chart(
+        make_season_opp_chart(season_splits[0], split_labels[0]),
+        use_container_width=True,
+    )
 with col2:
-    st.plotly_chart(make_season_opp_chart(season_splits[1], split_labels[1]), use_container_width=True)
+    st.plotly_chart(
+        make_season_opp_chart(season_splits[1], split_labels[1]),
+        use_container_width=True,
+    )
 
 
 # -- SECTION 3: CHARACTER MATCHUPS --------------------------------------------
@@ -419,7 +509,7 @@ df_heatmap = filter_by_season_option(season_sel_heatmap)
 season_label_heatmap = season_display_label(season_sel_heatmap)
 
 
-def make_char_pie(df_col, title):
+def make_char_pie(df_col: pd.Series, title: str) -> go.Figure:
     counts = df_col.dropna().value_counts().reset_index()
     counts.columns = ["character", "count"]
     counts = counts.sort_values("count", ascending=False).reset_index(drop=True)
@@ -433,7 +523,7 @@ def make_char_pie(df_col, title):
         textinfo="label+percent",
         hovertemplate="<b>%{label}</b><br>Games: %{value}<br>Share: %{percent}<extra></extra>",
     ))
-    fig.update_layout(title=title, height=420, showlegend=False)
+    fig.update_layout(title=title, height=300, showlegend=False, margin=dict(t=40, b=10, l=10, r=10))
     return fig
 
 
