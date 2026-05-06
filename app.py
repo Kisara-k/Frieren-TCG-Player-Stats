@@ -308,7 +308,7 @@ fig1.update_traces(
         "<extra></extra>"
     )
 )
-fig1.update_layout(legend_title_text="Result")
+fig1.update_layout(legend_title_text="Result", hoverlabel=dict(align="left"))
 st.plotly_chart(fig1, use_container_width=True)
 
 min_games = st.slider("Minimum games for win-rate chart", 1, 10, 5, key="min_games_slider")
@@ -381,6 +381,7 @@ fig_sov.add_trace(go.Scatter(
 fig_sov.update_layout(
     title=f"Season Overview - {player_label}",
     barmode="stack", legend_title_text="",
+    hoverlabel=dict(align="left"),
 )
 fig_sov.update_xaxes(categoryorder="array", categoryarray=season_overview["season"].tolist())
 fig_sov.update_yaxes(title_text="Games", secondary_y=False)
@@ -471,6 +472,7 @@ def make_season_opp_chart(season_subset, subtitle):
         height=420 + label_top_margin,
         margin=dict(t=label_top_margin, b=60, l=60, r=20),
         bargap=0.15, bargroupgap=0.05,
+        hoverlabel=dict(align="left"),
     )
     return fig
 
