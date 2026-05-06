@@ -46,5 +46,4 @@ Thumbs.db
 *.ipynb_checkpoints
 
 # Local data files
-data/*.csv
 !data/set_names.py

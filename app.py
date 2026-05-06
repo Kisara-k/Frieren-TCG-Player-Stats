@@ -133,7 +133,7 @@ def char_picks_str(df_col: pd.Series, top_n: int = 4) -> str:
     counts = df_col.dropna().value_counts()
     total = counts.sum()
     if total == 0:
-        return "—"
+        return "-"
     parts = []
     for c in counts.index[:top_n]:
         color = _hex_to_hsl_capped(char_color_map.get(c, "#AAAAAA"))
@@ -152,7 +152,7 @@ name_to_discord_id: dict[str, str] = {
 }
 all_names_sorted = sorted(name_to_discord_id.keys())
 
-# on_change callbacks — fired immediately on name selection, or on Enter/blur for text input
+# on_change callbacks - fired immediately on name selection, or on Enter/blur for text input
 def _commit_by_name():
     name = st.session_state.get("player_name_select")
     if name:
@@ -530,12 +530,12 @@ def make_char_pie(df_col: pd.Series, title: str) -> go.Figure:
 col_pie1, col_pie2 = st.columns(2)
 with col_pie1:
     st.plotly_chart(
-        make_char_pie(df_heatmap["player_char_name"], f"Your Character Picks — {season_label_heatmap}"),
+        make_char_pie(df_heatmap["player_char_name"], f"Your Character Picks - {season_label_heatmap}"),
         use_container_width=True,
     )
 with col_pie2:
     st.plotly_chart(
-        make_char_pie(df_heatmap["opp_char_name"], f"Opponent Character Picks — {season_label_heatmap}"),
+        make_char_pie(df_heatmap["opp_char_name"], f"Opponent Character Picks - {season_label_heatmap}"),
         use_container_width=True,
     )
 
