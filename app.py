@@ -169,7 +169,7 @@ if not confirmed_id:
 try:
     pm, player_label, season_counts = build_player_matches(confirmed_id)
 except (ValueError, OverflowError):
-    st.error("Invalid Discord ID � must be a numeric snowflake.")
+    st.error("Invalid Discord ID - must be a numeric snowflake.")
     st.stop()
 
 if pm is None or pm.empty:
@@ -217,7 +217,7 @@ long20 = top20.melt(
 fig1 = px.bar(
     long20, x="opp_label", y="Count", color="Result",
     color_discrete_map={"Wins": "#2ecc71", "Losses": "#e74c3c"},
-    title=f"Top 20 Opponents by Games Played � {season_label_matchup} ({player_label})",
+    title=f"Top 20 Opponents by Games Played - {season_label_matchup} ({player_label})",
     labels={"opp_label": "Opponent", "Count": "Games"},
     text_auto=True, barmode="stack",
     category_orders={"opp_label": top20["opp_label"].tolist()},
@@ -230,7 +230,7 @@ wr_df = overall[overall["Games"] >= min_games].sort_values("WinRate", ascending=
 fig2 = px.scatter(
     wr_df, x="WinRate", y="opp_label", size="Games", color="WinRate",
     color_continuous_scale="RdYlGn", range_color=[0, 100],
-    title=f"Win Rate vs Each Opponent (>={min_games} games) � {season_label_matchup} ({player_label})",
+    title=f"Win Rate vs Each Opponent (>={min_games} games) - {season_label_matchup} ({player_label})",
     labels={"opp_label": "Opponent", "WinRate": "Win Rate (%)"},
     hover_data={"Games": True, "Wins": True, "Losses": True, "WinRate": True},
 )
@@ -272,7 +272,7 @@ fig_sov.add_trace(go.Scatter(
     text=season_overview["WinRate"].astype(str) + "%", textposition="top center",
 ), secondary_y=True)
 fig_sov.update_layout(
-    title=f"Season Overview � {player_label}",
+    title=f"Season Overview - {player_label}",
     barmode="stack", legend_title_text="",
 )
 fig_sov.update_yaxes(title_text="Games", secondary_y=False)
@@ -319,7 +319,7 @@ def make_season_opp_chart(season_subset, subtitle):
             showlegend=not wins_in_legend, offsetgroup=og,
             customdata=df_rank[["opp_label", "Games", "WinRate", "Losses"]].values,
             hovertemplate=(
-                "<b>%{x}</b> � Rank #" + str(rank) + "<br>"
+                "<b>%{x}</b> - Rank #" + str(rank) + "<br>"
                 "%{customdata[0]}<br>"
                 "Wins: %{y}  Losses: %{customdata[3]}<br>"
                 "Games: %{customdata[1]}  WR: %{customdata[2]}%<extra></extra>"
@@ -336,7 +336,7 @@ def make_season_opp_chart(season_subset, subtitle):
             outsidetextfont=dict(size=11), constraintext="none", cliponaxis=False,
             customdata=df_rank[["opp_label", "Games", "WinRate", "Wins"]].values,
             hovertemplate=(
-                "<b>%{x}</b> � Rank #" + str(rank) + "<br>"
+                "<b>%{x}</b> - Rank #" + str(rank) + "<br>"
                 "%{customdata[0]}<br>"
                 "Wins: %{customdata[3]}  Losses: %{y}<br>"
                 "Games: %{customdata[1]}  WR: %{customdata[2]}%<extra></extra>"
@@ -347,7 +347,7 @@ def make_season_opp_chart(season_subset, subtitle):
     max_label_len = df_sub["opp_label"].str.len().max() if not df_sub.empty else 10
     label_top_margin = max(120, max_label_len * 8)
     fig.update_layout(
-        title=f"Top {top_n_season} Opponents per Season � {player_label} {subtitle}",
+        title=f"Top {top_n_season} Opponents per Season - {player_label} {subtitle}",
         barmode="group",
         xaxis=dict(title="Season", categoryorder="array", categoryarray=season_subset),
         yaxis_title="Games",
@@ -460,7 +460,7 @@ def char_heatmap(df, title):
 
 if df_heatmap["player_char_name"].notna().any():
     st.plotly_chart(
-        char_heatmap(df_heatmap, f"Character Matchup Win Rate � {season_label_heatmap} ({player_label})"),
+        char_heatmap(df_heatmap, f"Character Matchup Win Rate - {season_label_heatmap} ({player_label})"),
         use_container_width=True,
     )
 else:
