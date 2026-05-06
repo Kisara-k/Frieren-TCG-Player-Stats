@@ -75,6 +75,8 @@ def build_player_matches(discord_id_str: str):
     pm["player_char_name"] = pm["player_char"].map(char_map)
     pm["opp_char_name"] = pm["opp_char"].map(char_map)
     pm["opp_label"] = pm["opp_id"].map(player_label_map)
+    # Normalise ranked: null → 0 (unranked), any non-null value → 1 (ranked)
+    pm["ranked"] = pm["ranked"].notna().astype(int)
 
     # Pre-compute season game counts (stable reference for dropdown labels)
     season_counts = (
@@ -93,6 +95,9 @@ def matchup_stats(df, group_col="opp_label", top_n=None):
         Wins=("result", lambda x: (x == "Win").sum()),
         Losses=("result", lambda x: (x == "Loss").sum()),
     ).reset_index()
+    stats["Games"] = stats["Games"].astype(int)
+    stats["Wins"] = stats["Wins"].astype(int)
+    stats["Losses"] = stats["Losses"].astype(int)
     stats["WinRate"] = (stats["Wins"] / stats["Games"] * 100).round(1)
     stats = stats.sort_values("Games", ascending=False)
     if top_n:
@@ -176,22 +181,49 @@ if pm is None or pm.empty:
     st.error(f"No player found with Discord ID `{confirmed_id}`.")
     st.stop()
 
-seasons = list(season_counts.keys())  # already sorted by season number
-total_games = sum(season_counts.values())
-
 st.subheader(f"{player_label}")
-_season_breakdown = "  ·  ".join(f"{s}: {n}" for s, n in season_counts.items())
+
+# -- RANKED FILTER ------------------------------------------------------------
+ranked_mode = st.radio(
+    "Match type",
+    options=["All", "Ranked", "Unranked"],
+    horizontal=True,
+    key="ranked_filter",
+    label_visibility="collapsed",
+)
+
+if ranked_mode == "Ranked":
+    pm_filtered = pm[pm["ranked"] == 1].copy()
+elif ranked_mode == "Unranked":
+    pm_filtered = pm[pm["ranked"] == 0].copy()
+else:
+    pm_filtered = pm
+
+# Recompute season counts from the filtered set for accurate dropdown labels
+_filtered_season_counts = (
+    pm_filtered.groupby("season")["result"]
+    .count()
+    .reindex(sorted(pm_filtered["season"].unique(), key=lambda s: int(s[1:])) if not pm_filtered.empty else [])
+    .dropna()
+    .astype(int)
+    .to_dict()
+) if not pm_filtered.empty else {}
+
+seasons = list(_filtered_season_counts.keys())
+total_games = sum(_filtered_season_counts.values())
+
+_season_breakdown = "  ·  ".join(f"{s}: {n}" for s, n in _filtered_season_counts.items())
 st.caption(f"Total matches: {total_games}  |  {_season_breakdown}")
 
-# Dropdown labels are built once from precomputed season_counts
+# Dropdown labels built from the filtered season counts
 all_option = f"All  ({total_games} games)"
-season_options = [all_option] + [f"{s}  ({n} games)" for s, n in season_counts.items()]
+season_options = [all_option] + [f"{s}  ({n} games)" for s, n in _filtered_season_counts.items()]
 
 def filter_by_season_option(option: str) -> pd.DataFrame:
     if option == all_option:
-        return pm
+        return pm_filtered
     season_key = option.split("  ")[0]
-    return pm[pm["season"] == season_key]
+    return pm_filtered[pm_filtered["season"] == season_key]
 
 def season_display_label(option: str) -> str:
     return "All Seasons" if option == all_option else option.split("  ")[0]
@@ -247,7 +279,7 @@ st.plotly_chart(fig2, use_container_width=True)
 # -- SECTION 2: PER-SEASON BREAKDOWN -------------------------------------------
 st.header("Per-Season Breakdown")
 
-season_overview = pm.groupby("season").agg(
+season_overview = pm_filtered.groupby("season").agg(
     Games=("result", "count"),
     Wins=("result", lambda x: (x == "Win").sum()),
     Losses=("result", lambda x: (x == "Loss").sum()),
@@ -283,7 +315,7 @@ st.plotly_chart(fig_sov, use_container_width=True)
 top_n_season = 6
 rows = []
 for season in seasons:
-    df_s = pm[pm["season"] == season]
+    df_s = pm_filtered[pm_filtered["season"] == season]
     stats_s = matchup_stats(df_s, top_n=top_n_season)
     for rank, (_, row) in enumerate(stats_s.iterrows(), start=1):
         rows.append({
