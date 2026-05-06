@@ -40,6 +40,7 @@ player_label_map = {
     for _, row in players.iterrows()
 }
 char_map = characters.set_index("id")["name"].to_dict()
+char_color_map = characters.set_index("name")["Hex"].to_dict() if "Hex" in characters.columns else {}
 
 
 @st.cache_data
@@ -246,6 +247,7 @@ long20 = top20.melt(
     id_vars="opp_label", value_vars=["Wins", "Losses"],
     var_name="Result", value_name="Count",
 )
+long20 = long20.merge(top20[["opp_label", "Games", "WinRate"]], on="opp_label")
 fig1 = px.bar(
     long20, x="opp_label", y="Count", color="Result",
     color_discrete_map={"Wins": "#2ecc71", "Losses": "#e74c3c"},
@@ -253,6 +255,10 @@ fig1 = px.bar(
     labels={"opp_label": "Opponent", "Count": "Games"},
     text_auto=True, barmode="stack",
     category_orders={"opp_label": top20["opp_label"].tolist()},
+    custom_data=["Games", "WinRate"],
+)
+fig1.update_traces(
+    hovertemplate="<b>%{x}</b><br>%{fullData.name}: %{y}<br>Total games: %{customdata[0]}  |  WR: %{customdata[1]}%<extra></extra>"
 )
 fig1.update_layout(legend_title_text="Result")
 st.plotly_chart(fig1, use_container_width=True)
@@ -402,8 +408,8 @@ with col2:
     st.plotly_chart(make_season_opp_chart(season_splits[1], split_labels[1]), use_container_width=True)
 
 
-# -- SECTION 3: CHARACTER MATCHUP HEATMAP --------------------------------------
-st.header("Character Matchup Heatmap")
+# -- SECTION 3: CHARACTER MATCHUPS --------------------------------------------
+st.header("Character Matchups")
 
 season_sel_heatmap = st.selectbox(
     "Season filter", season_options, key="heatmap_season",
@@ -411,6 +417,37 @@ season_sel_heatmap = st.selectbox(
 )
 df_heatmap = filter_by_season_option(season_sel_heatmap)
 season_label_heatmap = season_display_label(season_sel_heatmap)
+
+
+def make_char_pie(df_col, title):
+    counts = df_col.dropna().value_counts().reset_index()
+    counts.columns = ["character", "count"]
+    counts = counts.sort_values("count", ascending=False).reset_index(drop=True)
+    colors = [char_color_map.get(c, "#AAAAAA") for c in counts["character"]]
+    fig = go.Figure(go.Pie(
+        labels=counts["character"],
+        values=counts["count"],
+        marker=dict(colors=colors),
+        direction="clockwise",
+        sort=False,
+        textinfo="label+percent",
+        hovertemplate="<b>%{label}</b><br>Games: %{value}<br>Share: %{percent}<extra></extra>",
+    ))
+    fig.update_layout(title=title, height=420, showlegend=False)
+    return fig
+
+
+col_pie1, col_pie2 = st.columns(2)
+with col_pie1:
+    st.plotly_chart(
+        make_char_pie(df_heatmap["player_char_name"], f"Your Character Picks — {season_label_heatmap}"),
+        use_container_width=True,
+    )
+with col_pie2:
+    st.plotly_chart(
+        make_char_pie(df_heatmap["opp_char_name"], f"Opponent Character Picks — {season_label_heatmap}"),
+        use_container_width=True,
+    )
 
 
 def char_heatmap(df, title):
