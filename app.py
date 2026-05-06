@@ -284,6 +284,9 @@ season_overview = pm_filtered.groupby("season").agg(
     Wins=("result", lambda x: (x == "Win").sum()),
     Losses=("result", lambda x: (x == "Loss").sum()),
 ).reset_index()
+season_overview = season_overview.iloc[
+    season_overview["season"].str[1:].astype(int).argsort()
+].reset_index(drop=True)
 season_overview["WinRate"] = (season_overview["Wins"] / season_overview["Games"] * 100).round(1)
 
 fig_sov = make_subplots(specs=[[{"secondary_y": True}]])
@@ -307,6 +310,7 @@ fig_sov.update_layout(
     title=f"Season Overview - {player_label}",
     barmode="stack", legend_title_text="",
 )
+fig_sov.update_xaxes(categoryorder="array", categoryarray=season_overview["season"].tolist())
 fig_sov.update_yaxes(title_text="Games", secondary_y=False)
 fig_sov.update_yaxes(title_text="Win Rate (%)", range=[0, 110], secondary_y=True)
 st.plotly_chart(fig_sov, use_container_width=True)
