@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import numpy as np
 
-st.set_page_config(page_title="Frieren TCG Analysis", layout="wide")
+st.set_page_config(page_title="Frieren TCG Player Stats", layout="wide")
 
 st.markdown(
     """
@@ -106,7 +106,7 @@ def matchup_stats(df, group_col="opp_label", top_n=None):
 
 
 # -- PLAYER SEARCH -------------------------------------------------------------
-st.title("Frieren TCG Analysis")
+st.title("Frieren TCG Player Stats")
 
 # Map player display name -> discord ID string (built once from cached data)
 name_to_discord_id: dict[str, str] = {
@@ -257,7 +257,7 @@ fig1 = px.bar(
 fig1.update_layout(legend_title_text="Result")
 st.plotly_chart(fig1, use_container_width=True)
 
-min_games = st.slider("Minimum games for win-rate chart", 1, 10, 3, key="min_games_slider")
+min_games = st.slider("Minimum games for win-rate chart", 1, 10, 5, key="min_games_slider")
 wr_df = overall[overall["Games"] >= min_games].sort_values("WinRate", ascending=True).reset_index(drop=True)
 fig2 = px.scatter(
     wr_df, x="WinRate", y="opp_label", size="Games", color="WinRate",
