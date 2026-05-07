@@ -4,6 +4,9 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import numpy as np
+import os
+import subprocess
+from datetime import datetime
 
 st.set_page_config(page_title="Frieren TCG Player Stats", layout="wide")
 
@@ -144,6 +147,28 @@ def char_picks_str(df_col: pd.Series, top_n: int = 4) -> str:
 
 # -- PLAYER SEARCH -------------------------------------------------------------
 st.title("Frieren TCG Player Stats")
+try:
+    # Try git first (works locally and on Streamlit Cloud)
+    result = subprocess.run(
+        ["git", "log", "-1", "--format=%ai", "data/Match.csv"],
+        capture_output=True, text=True, timeout=2
+    )
+    if result.returncode == 0 and result.stdout.strip():
+        git_date = datetime.fromisoformat(result.stdout.strip().split()[0])
+        _last_updated_str = git_date.strftime('%B %d, %Y')
+    else:
+        raise ValueError("git log failed")
+except Exception:
+    # Fallback to filesystem mtime
+    try:
+        if os.path.exists("data/Match.csv"):
+            _mod_time = datetime.fromtimestamp(os.path.getmtime("data/Match.csv"))
+            _last_updated_str = _mod_time.strftime('%B %d, %Y')
+        else:
+            _last_updated_str = "Unknown"
+    except Exception:
+        _last_updated_str = "Unknown"
+st.caption(f"Last updated: {_last_updated_str}")
 
 # Map player display name -> discord ID string (built once from cached data)
 name_to_discord_id: dict[str, str] = {
