@@ -486,12 +486,9 @@ _sopp_picks = (
     .reset_index()
 )
 season_opp_df = season_opp_df.merge(_sopp_picks, on=["season", "opp_label"], how="left")
-mid = len(seasons) // 2
-season_splits = [seasons[:mid], seasons[mid:]]
-split_labels = ["(Early Seasons)", "(Late Seasons)"]
 
 
-def make_season_opp_chart(season_subset, subtitle):
+def make_season_opp_chart(season_subset):
     df_sub = season_opp_df[season_opp_df["season"].isin(season_subset)].copy()
     fig = go.Figure()
     wins_in_legend = False
@@ -535,7 +532,7 @@ def make_season_opp_chart(season_subset, subtitle):
     max_label_len = df_sub["opp_label"].str.len().max() if not df_sub.empty else 10
     label_top_margin = max(120, max_label_len * 8)
     fig.update_layout(
-        title=f"Top {top_n_season} Opponents per Season - {player_label} {subtitle}",
+        title=f"Top {top_n_season} Opponents per Season - {player_label}",
         barmode="group",
         xaxis=dict(title="Season", categoryorder="array", categoryarray=season_subset),
         yaxis_title="Games",
@@ -548,17 +545,7 @@ def make_season_opp_chart(season_subset, subtitle):
     return fig
 
 
-col1, col2 = st.columns(2)
-with col1:
-    st.plotly_chart(
-        make_season_opp_chart(season_splits[0], split_labels[0]),
-        use_container_width=True,
-    )
-with col2:
-    st.plotly_chart(
-        make_season_opp_chart(season_splits[1], split_labels[1]),
-        use_container_width=True,
-    )
+st.plotly_chart(make_season_opp_chart(seasons), use_container_width=True)
 
 
 # -- SECTION 3: CHARACTER MATCHUPS --------------------------------------------
