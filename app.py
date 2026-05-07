@@ -272,7 +272,7 @@ if pm is None or pm.empty:
 st.subheader(f"{player_label}")
 
 # -- RANKED / LADDER FILTER --------------------------------------------------
-_col_ranked, _col_ladder = st.columns([1, 1])
+_col_ranked, _col_ladder, _col_self = st.columns([1, 1, 0.5])
 with _col_ranked:
     ranked_mode = st.radio(
         "Match type",
@@ -292,6 +292,8 @@ with _col_ladder:
         key="ladder_filter",
         label_visibility="collapsed",
     )
+with _col_self:
+    include_self = st.checkbox("Include self", value=False, key="include_self")
 
 # Apply ladder filter first, then ranked filter
 _ladder_raw = _LADDER_RAW[ladder_mode]
@@ -306,6 +308,9 @@ elif ranked_mode == "Unranked":
     pm_filtered = pm_ladder[pm_ladder["ranked"] == 0].copy()
 else:
     pm_filtered = pm_ladder
+
+if not include_self:
+    pm_filtered = pm_filtered[pm_filtered["winnerId"] != pm_filtered["loserId"]].copy()
 
 # Recompute season counts from the filtered set for accurate dropdown labels
 _filtered_season_counts = (
