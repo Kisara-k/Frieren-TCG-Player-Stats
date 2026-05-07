@@ -501,11 +501,12 @@ df_heatmap = filter_by_season_option(season_sel_heatmap)
 season_label_heatmap = season_display_label(season_sel_heatmap)
 
 
-def make_char_pie(df_col: pd.Series, title: str) -> go.Figure:
+def make_char_pie(df_col: pd.Series, title: str, opp_strs: list | None = None) -> go.Figure:
     counts = df_col.dropna().value_counts().reset_index()
     counts.columns = ["character", "count"]
     counts = counts.sort_values("count", ascending=False).reset_index(drop=True)
     colors = [char_color_map.get(c, "#AAAAAA") for c in counts["character"]]
+    extra_line = "<br>%{customdata}" if opp_strs is not None else ""
     fig = go.Figure(go.Pie(
         labels=counts["character"],
         values=counts["count"],
@@ -513,21 +514,40 @@ def make_char_pie(df_col: pd.Series, title: str) -> go.Figure:
         direction="clockwise",
         sort=False,
         textinfo="label+percent",
-        hovertemplate="<b>%{label}</b><br>Games: %{value}<br>Share: %{percent}<extra></extra>",
+        customdata=opp_strs if opp_strs is not None else [None] * len(counts),
+        hovertemplate=f"<b>%{{label}}</b><br>Games: %{{value}}  |  Share: %{{percent}}{extra_line}<extra></extra>",
     ))
-    fig.update_layout(title=title, height=300, showlegend=False, margin=dict(t=40, b=10, l=10, r=10))
+    fig.update_layout(title=title, height=300, showlegend=False,
+                      hoverlabel=dict(align="left"),
+                      margin=dict(t=40, b=10, l=10, r=10))
     return fig
 
 
+def _top_opps_str(df: pd.DataFrame, filter_col: str, char: str, opp_col: str, top_n: int = 4) -> str:
+    """Top N opponents by % for a given character, split into 2 lines of 2 each."""
+    sub = df[df[filter_col] == char][opp_col].dropna().value_counts()
+    total = sub.sum()
+    if total == 0:
+        return "—"
+    tops = [f"{o} {sub[o]/total*100:.0f}%" for o in sub.index[:top_n]]
+    line1 = "  ·  ".join(tops[:2])
+    line2 = "  ·  ".join(tops[2:4]) if len(tops) > 2 else ""
+    return f"{line1}<br>{line2}" if line2 else line1
+
+
 col_pie1, col_pie2 = st.columns(2)
+_my_chars = df_heatmap["player_char_name"].dropna().value_counts().sort_values(ascending=False).index.tolist()
+_opp_chars = df_heatmap["opp_char_name"].dropna().value_counts().sort_values(ascending=False).index.tolist()
+_my_opp_strs = [_top_opps_str(df_heatmap, "player_char_name", c, "opp_label") for c in _my_chars]
+_opp_opp_strs = [_top_opps_str(df_heatmap, "opp_char_name", c, "opp_label") for c in _opp_chars]
 with col_pie1:
     st.plotly_chart(
-        make_char_pie(df_heatmap["player_char_name"], f"Your Character Picks - {season_label_heatmap}"),
+        make_char_pie(df_heatmap["player_char_name"], f"Your Character Picks - {season_label_heatmap}", _my_opp_strs),
         use_container_width=True,
     )
 with col_pie2:
     st.plotly_chart(
-        make_char_pie(df_heatmap["opp_char_name"], f"Opponent Character Picks - {season_label_heatmap}"),
+        make_char_pie(df_heatmap["opp_char_name"], f"Opponent Character Picks - {season_label_heatmap}", _opp_opp_strs),
         use_container_width=True,
     )
 
