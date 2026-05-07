@@ -29,10 +29,35 @@ def load_data():
     players = pd.read_csv("data/Player.csv")
     matches = pd.read_csv("data/Match.csv")
     characters = pd.read_csv("data/Character.csv")
+    ladder_resets = pd.read_csv("data/LadderReset.csv")
+    ladders = pd.read_csv("data/Ladder.csv")
     players["name"] = players["name"].replace("", pd.NA).fillna(players["discordName"])
-    return players, matches, characters
+    return players, matches, characters, ladder_resets, ladders
 
-players, matches, characters = load_data()
+players, matches, characters, ladder_resets, ladders = load_data()
+
+# ladderResetId -> ladder name (e.g. "classic", "blitz", "slow", "classic-prescience")
+_reset_to_ladder_name = (
+    ladder_resets.merge(ladders, left_on="ladderId", right_on="id")[["id_x", "name"]]
+    .rename(columns={"id_x": "ladderResetId"})
+    .set_index("ladderResetId")["name"]
+    .to_dict()
+)
+
+# ladderResetId -> canonical season label (S1, S2, ...) based on classic ladder seasons.
+# Every non-classic reset is assigned to whichever classic season was active at the same time
+# (i.e. the latest classic reset whose startDate is <= this reset's startDate).
+_classic_resets = (
+    ladder_resets[ladder_resets["ladderId"] == 1]
+    .sort_values("startDate")
+    .reset_index(drop=True)
+    .assign(season_num=lambda df: range(1, len(df) + 1))
+)
+_reset_to_season = {}
+for _, _r in ladder_resets.iterrows():
+    _mask = _classic_resets["startDate"] <= _r["startDate"]
+    _snum = int(_classic_resets.loc[_mask, "season_num"].iloc[-1]) if _mask.any() else 1
+    _reset_to_season[int(_r["id"])] = f"S{_snum}"
 
 player_label_map = {
     row["id"]: (
@@ -75,12 +100,13 @@ def build_player_matches(discord_id_str: str):
     as_loser["opp_char"] = as_loser["winnerCharacterId"]
 
     pm = pd.concat([as_winner, as_loser], ignore_index=True)
-    pm["season"] = "S" + pm["ladderResetId"].astype(str)
+    pm["season"] = pm["ladderResetId"].map(_reset_to_season)
     pm["player_char_name"] = pm["player_char"].map(char_map)
     pm["opp_char_name"] = pm["opp_char"].map(char_map)
     pm["opp_label"] = pm["opp_id"].map(player_label_map)
     # Normalise ranked: null → 0 (unranked), any non-null value → 1 (ranked)
     pm["ranked"] = pm["ranked"].notna().astype(int)
+    pm["ladder_name"] = pm["ladderResetId"].map(_reset_to_ladder_name)
 
     # Pre-compute season game counts (stable reference for dropdown labels)
     season_counts = (
@@ -245,21 +271,41 @@ if pm is None or pm.empty:
 
 st.subheader(f"{player_label}")
 
-# -- RANKED FILTER ------------------------------------------------------------
-ranked_mode = st.radio(
-    "Match type",
-    options=["All", "Ranked", "Unranked"],
-    horizontal=True,
-    key="ranked_filter",
-    label_visibility="collapsed",
-)
+# -- RANKED / LADDER FILTER --------------------------------------------------
+_col_ranked, _col_ladder = st.columns([1, 1])
+with _col_ranked:
+    ranked_mode = st.radio(
+        "Match type",
+        options=["All", "Ranked", "Unranked"],
+        horizontal=True,
+        key="ranked_filter",
+        label_visibility="collapsed",
+    )
+with _col_ladder:
+    _LADDER_OPTIONS = ["Classic", "All", "Blitz", "Slow", "Prescience"]
+    _LADDER_RAW = {"Classic": "classic", "Blitz": "blitz", "Slow": "slow", "Prescience": "classic-prescience", "All": None}
+    ladder_mode = st.radio(
+        "Ladder",
+        options=_LADDER_OPTIONS,
+        index=0,
+        horizontal=True,
+        key="ladder_filter",
+        label_visibility="collapsed",
+    )
+
+# Apply ladder filter first, then ranked filter
+_ladder_raw = _LADDER_RAW[ladder_mode]
+if _ladder_raw is not None:
+    pm_ladder = pm[pm["ladder_name"] == _ladder_raw].copy()
+else:
+    pm_ladder = pm
 
 if ranked_mode == "Ranked":
-    pm_filtered = pm[pm["ranked"] == 1].copy()
+    pm_filtered = pm_ladder[pm_ladder["ranked"] == 1].copy()
 elif ranked_mode == "Unranked":
-    pm_filtered = pm[pm["ranked"] == 0].copy()
+    pm_filtered = pm_ladder[pm_ladder["ranked"] == 0].copy()
 else:
-    pm_filtered = pm
+    pm_filtered = pm_ladder
 
 # Recompute season counts from the filtered set for accurate dropdown labels
 _filtered_season_counts = (
@@ -440,12 +486,9 @@ _sopp_picks = (
     .reset_index()
 )
 season_opp_df = season_opp_df.merge(_sopp_picks, on=["season", "opp_label"], how="left")
-mid = len(seasons) // 2
-season_splits = [seasons[:mid], seasons[mid:]]
-split_labels = ["(Early Seasons)", "(Late Seasons)"]
 
 
-def make_season_opp_chart(season_subset, subtitle):
+def make_season_opp_chart(season_subset):
     df_sub = season_opp_df[season_opp_df["season"].isin(season_subset)].copy()
     fig = go.Figure()
     wins_in_legend = False
@@ -489,7 +532,7 @@ def make_season_opp_chart(season_subset, subtitle):
     max_label_len = df_sub["opp_label"].str.len().max() if not df_sub.empty else 10
     label_top_margin = max(120, max_label_len * 8)
     fig.update_layout(
-        title=f"Top {top_n_season} Opponents per Season - {player_label} {subtitle}",
+        title=f"Top {top_n_season} Opponents per Season - {player_label}",
         barmode="group",
         xaxis=dict(title="Season", categoryorder="array", categoryarray=season_subset),
         yaxis_title="Games",
@@ -502,17 +545,7 @@ def make_season_opp_chart(season_subset, subtitle):
     return fig
 
 
-col1, col2 = st.columns(2)
-with col1:
-    st.plotly_chart(
-        make_season_opp_chart(season_splits[0], split_labels[0]),
-        use_container_width=True,
-    )
-with col2:
-    st.plotly_chart(
-        make_season_opp_chart(season_splits[1], split_labels[1]),
-        use_container_width=True,
-    )
+st.plotly_chart(make_season_opp_chart(seasons), use_container_width=True)
 
 
 # -- SECTION 3: CHARACTER MATCHUPS --------------------------------------------
