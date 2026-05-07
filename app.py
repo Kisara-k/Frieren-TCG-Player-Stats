@@ -530,7 +530,7 @@ def make_season_opp_chart(season_subset):
         losses_in_legend = True
 
     max_label_len = df_sub["opp_label"].str.len().max() if not df_sub.empty else 10
-    label_top_margin = max(120, max_label_len * 8)
+    label_top_margin = 40
     fig.update_layout(
         title=f"Top {top_n_season} Opponents per Season - {player_label}",
         barmode="group",
@@ -572,6 +572,8 @@ def make_char_pie(df_col: pd.Series, title: str, opp_strs: list | None = None) -
         direction="clockwise",
         sort=False,
         textinfo="label+percent",
+        textposition="auto",
+        textfont=dict(size=11),
         customdata=opp_strs if opp_strs is not None else [None] * len(counts),
         hovertemplate=f"<b>%{{label}}</b><br>Games: %{{value}}  |  Share: %{{percent}}{extra_line}<extra></extra>",
     ))
