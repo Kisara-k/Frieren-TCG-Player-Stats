@@ -2,7 +2,9 @@ import csv
 import os
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dotenv import load_dotenv
 
+load_dotenv()
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 if not TOKEN:
     raise ValueError("DISCORD_BOT_TOKEN environment variable is not set")
@@ -34,7 +36,7 @@ def main():
     id_to_row = {}
     for row in rows:
         discord_id = row.get("discordId", "").strip()
-        if discord_id and not row.get("discordName", "").strip():
+        if discord_id and not (row.get("discordName") or "").strip():
             id_to_row[discord_id] = row
 
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
@@ -45,7 +47,7 @@ def main():
                 id_to_row[uid]["discordName"] = username
                 print(f"{uid} -> {username}")
 
-    fieldnames = ["id", "discordId", "name", "discordName"]
+    fieldnames = ["id", "discordId", "discordName", "name"]
     with open(CSV_PATH, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
