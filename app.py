@@ -389,11 +389,11 @@ st.plotly_chart(fig1, use_container_width=True)
 
 _max_threshold = 50
 _default_min = _max_threshold
-for _threshold in range(5, _max_threshold+1, 5):
+for _threshold in range(1, _max_threshold+1, 2):
     if len(overall[overall["Games"] >= _threshold]) <= 20:
         _default_min = _threshold
         break
-min_games = st.slider("Minimum games for win-rate chart", 1, _max_threshold, _default_min, key="min_games_slider")
+min_games = st.slider("Minimum games for win-rate chart", 1, _max_threshold, _default_min, key=f"min_games_slider_{confirmed_id}")
 wr_df = overall[overall["Games"] >= min_games].sort_values("WinRate", ascending=True).reset_index(drop=True)
 fig2 = px.scatter(
     wr_df, x="WinRate", y="opp_label", size="Games", color="WinRate",
