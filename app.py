@@ -24,8 +24,32 @@ st.markdown(
 )
 
 # -- DATA LOADING --------------------------------------------------------------
+def _get_data_stamp() -> tuple[str, str]:
+    """Return (cache_stamp, display_str) from Match.csv's last-modified date.
+    The stamp is passed to load_data() so the cache invalidates when data changes."""
+    try:
+        result = subprocess.run(
+            ["git", "log", "-1", "--format=%ai", "data/Match.csv"],
+            capture_output=True, text=True, timeout=2
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            date_str = result.stdout.strip().split()[0]
+            return date_str, datetime.fromisoformat(date_str).strftime('%B %d, %Y')
+    except Exception:
+        pass
+    try:
+        if os.path.exists("data/Match.csv"):
+            mtime = os.path.getmtime("data/Match.csv")
+            return str(mtime), datetime.fromtimestamp(mtime).strftime('%B %d, %Y')
+    except Exception:
+        pass
+    return "unknown", "Unknown"
+
+_data_stamp, _last_updated_str = _get_data_stamp()
+
 @st.cache_data
-def load_data():
+def load_data(stamp: str):  # stamp unused inside; changing it busts the cache
+    print(f"[cache MISS] load_data() called with stamp={stamp!r}")
     players = pd.read_csv("data/Player.csv")
     matches = pd.read_csv("data/Match.csv")
     characters = pd.read_csv("data/Character.csv")
@@ -34,7 +58,7 @@ def load_data():
     players["name"] = players["name"].replace("", pd.NA).fillna(players["discordName"])
     return players, matches, characters, ladder_resets, ladders
 
-players, matches, characters, ladder_resets, ladders = load_data()
+players, matches, characters, ladder_resets, ladders = load_data(_data_stamp)
 
 # ladderResetId -> ladder name (e.g. "classic", "blitz", "slow", "classic-prescience")
 _reset_to_ladder_name = (
@@ -173,27 +197,6 @@ def char_picks_str(df_col: pd.Series, top_n: int = 4) -> str:
 
 # -- PLAYER SEARCH -------------------------------------------------------------
 st.title("Frieren TCG Player Stats")
-try:
-    # Try git first (works locally and on Streamlit Cloud)
-    result = subprocess.run(
-        ["git", "log", "-1", "--format=%ai", "data/Match.csv"],
-        capture_output=True, text=True, timeout=2
-    )
-    if result.returncode == 0 and result.stdout.strip():
-        git_date = datetime.fromisoformat(result.stdout.strip().split()[0])
-        _last_updated_str = git_date.strftime('%B %d, %Y')
-    else:
-        raise ValueError("git log failed")
-except Exception:
-    # Fallback to filesystem mtime
-    try:
-        if os.path.exists("data/Match.csv"):
-            _mod_time = datetime.fromtimestamp(os.path.getmtime("data/Match.csv"))
-            _last_updated_str = _mod_time.strftime('%B %d, %Y')
-        else:
-            _last_updated_str = "Unknown"
-    except Exception:
-        _last_updated_str = "Unknown"
 st.caption(f"Last updated: {_last_updated_str}")
 
 # Map player display name -> discord ID string (built once from cached data)
