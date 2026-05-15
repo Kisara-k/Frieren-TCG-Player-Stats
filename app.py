@@ -33,8 +33,9 @@ def _get_data_stamp() -> tuple[str, str]:
             capture_output=True, text=True, timeout=2
         )
         if result.returncode == 0 and result.stdout.strip():
-            date_str = result.stdout.strip().split()[0]
-            return date_str, datetime.fromisoformat(date_str).strftime('%B %d, %Y')
+            full_str = result.stdout.strip()
+            date_str = full_str.split()[0]
+            return full_str, datetime.fromisoformat(date_str).strftime('%B %d, %Y')
     except Exception:
         pass
     try:
@@ -426,7 +427,7 @@ season_overview = pm_filtered.groupby("season").agg(
 season_overview = season_overview.iloc[
     season_overview["season"].str[1:].astype(int).argsort()
 ].reset_index(drop=True)
-season_overview["WinRate"] = (season_overview["Wins"] / season_overview["Games"] * 100).round(1)
+season_overview["WinRate"] = (season_overview["Wins"].astype(float) / season_overview["Games"].astype(float) * 100).round(1)
 season_overview["MyPicks"] = season_overview["season"].map(
     lambda s: char_picks_str(pm_filtered[pm_filtered["season"] == s]["player_char_name"])
 )
