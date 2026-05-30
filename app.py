@@ -6,7 +6,7 @@ from plotly.subplots import make_subplots
 import numpy as np
 import os
 import subprocess
-from datetime import datetime
+from datetime import datetime, timedelta
 
 st.set_page_config(page_title="Frieren TCG Player Stats", layout="wide")
 
@@ -83,6 +83,12 @@ for _, _r in ladder_resets.iterrows():
     _mask = _classic_resets["startDate"] <= _r["startDate"]
     _snum = int(_classic_resets.loc[_mask, "season_num"].iloc[-1]) if _mask.any() else 1
     _reset_to_season[int(_r["id"])] = f"S{_snum}"
+
+# season label -> start timestamp (ms) — used for weekly breakdown
+_season_start_ms = {
+    f"S{int(row['season_num'])}": int(row["startDate"])
+    for _, row in _classic_resets.iterrows()
+}
 
 player_label_map = {
     row["id"]: (
@@ -417,98 +423,109 @@ st.plotly_chart(fig2, use_container_width=True)
 
 
 # -- SECTION 2: PER-SEASON BREAKDOWN -------------------------------------------
-st.header("Per-Season Breakdown")
+st.header("Season & Weekly Breakdown")
+st.caption("Select **All Seasons** for a season-by-season overview, or pick a specific season to drill down by **week**.")
 
-season_overview = pm_filtered.groupby("season").agg(
-    Games=("result", "count"),
-    Wins=("result", lambda x: (x == "Win").sum()),
-    Losses=("result", lambda x: (x == "Loss").sum()),
-).reset_index()
-season_overview = season_overview.iloc[
-    season_overview["season"].str[1:].astype(int).argsort()
-].reset_index(drop=True)
-season_overview["WinRate"] = (season_overview["Wins"].astype(float) / season_overview["Games"].astype(float) * 100).round(1)
-season_overview["MyPicks"] = season_overview["season"].map(
-    lambda s: char_picks_str(pm_filtered[pm_filtered["season"] == s]["player_char_name"])
+season_sel_breakdown = st.selectbox(
+    "Season", season_options, key="breakdown_season",
+    label_visibility="collapsed",
 )
-season_overview["OppPicks"] = season_overview["season"].map(
-    lambda s: char_picks_str(pm_filtered[pm_filtered["season"] == s]["opp_char_name"])
-)
-_sov_cd = season_overview[["WinRate", "Wins", "Losses", "Games", "MyPicks", "OppPicks"]].values
 
-fig_sov = make_subplots(specs=[[{"secondary_y": True}]])
-_sov_ht = (
-    "<b>%{x}</b><br>"
-    "Wins %{customdata[1]}  |  Losses %{customdata[2]}  |  Total %{customdata[3]}  |  WR: %{customdata[0]}%<br>"
-    "<b>Your picks:</b> %{customdata[4]}<br>"
-    "<b>Their picks:</b> %{customdata[5]}<extra></extra>"
-)
-fig_sov.add_trace(go.Bar(
-    x=season_overview["season"], y=season_overview["Wins"],
-    name="Wins", marker_color="#2ecc71",
-    text=season_overview["Wins"], textposition="inside",
-    customdata=_sov_cd,
-    hovertemplate=_sov_ht,
-), secondary_y=False)
-fig_sov.add_trace(go.Bar(
-    x=season_overview["season"], y=season_overview["Losses"],
-    name="Losses", marker_color="#e74c3c",
-    text=season_overview["Losses"], textposition="inside",
-    customdata=_sov_cd,
-    hovertemplate=_sov_ht,
-), secondary_y=False)
-_sov_wr = season_overview[season_overview["Games"] >= 10]
-fig_sov.add_trace(go.Scatter(
-    x=_sov_wr["season"], y=_sov_wr["WinRate"],
-    name="Win Rate %", mode="lines+markers+text",
-    line=dict(color="#3498db", width=2), marker=dict(size=8),
-    text=_sov_wr["WinRate"].astype(str) + "%", textposition="top center",
-), secondary_y=True)
-fig_sov.update_layout(
-    title=f"Season Overview - {player_label}",
-    barmode="stack", legend_title_text="",
-    hoverlabel=dict(align="left"),
-)
-fig_sov.update_xaxes(categoryorder="array", categoryarray=season_overview["season"].tolist())
-fig_sov.update_yaxes(title_text="Games", secondary_y=False)
-fig_sov.update_yaxes(title_text="Win Rate (%)", range=[0, 110], secondary_y=True)
-st.plotly_chart(fig_sov, use_container_width=True)
-
-# Per-season top opponents
 top_n_season = 6
-rows = []
-for season in seasons:
-    df_s = pm_filtered[pm_filtered["season"] == season]
-    stats_s = matchup_stats(df_s, top_n=top_n_season)
-    for rank, (_, row) in enumerate(stats_s.iterrows(), start=1):
-        rows.append({
-            "season": season,
-            "opp_label": row["opp_label"],
-            "rank": rank,
-            "Wins": int(row["Wins"]),
-            "Losses": int(row["Losses"]),
-            "Games": int(row["Games"]),
-            "WinRate": row["WinRate"],
-        })
-
-season_opp_df = pd.DataFrame(rows)
-_sopp_picks = (
-    pm_filtered.groupby(["season", "opp_label"])[["player_char_name", "opp_char_name"]]
-    .apply(lambda g: pd.Series({
-        "MyPicks": char_picks_str(g["player_char_name"]),
-        "OppPicks": char_picks_str(g["opp_char_name"]),
-    }))
-    .reset_index()
-)
-season_opp_df = season_opp_df.merge(_sopp_picks, on=["season", "opp_label"], how="left")
 
 
-def make_season_opp_chart(season_subset):
-    df_sub = season_opp_df[season_opp_df["season"].isin(season_subset)].copy()
+def _build_period_overview(df, period_col, period_order):
+    """Aggregate wins/losses/WR and char picks by period column."""
+    ov = df.groupby(period_col).agg(
+        Games=("result", "count"),
+        Wins=("result", lambda x: (x == "Win").sum()),
+        Losses=("result", lambda x: (x == "Loss").sum()),
+    ).reset_index()
+    ov = ov.set_index(period_col).reindex(period_order).reset_index()
+    ov["WinRate"] = (ov["Wins"].astype(float) / ov["Games"].astype(float) * 100).round(1)
+    ov["MyPicks"] = ov[period_col].map(
+        lambda p: char_picks_str(df[df[period_col] == p]["player_char_name"])
+    )
+    ov["OppPicks"] = ov[period_col].map(
+        lambda p: char_picks_str(df[df[period_col] == p]["opp_char_name"])
+    )
+    return ov
+
+
+def _make_overview_chart(ov, period_col, period_order, title):
+    """Stacked bar + win-rate line chart for a period overview dataframe."""
+    _cd = ov[["WinRate", "Wins", "Losses", "Games", "MyPicks", "OppPicks"]].values
+    _ht = (
+        "<b>%{x}</b><br>"
+        "Wins %{customdata[1]}  |  Losses %{customdata[2]}  |  Total %{customdata[3]}  |  WR: %{customdata[0]}%<br>"
+        "<b>Your picks:</b> %{customdata[4]}<br>"
+        "<b>Their picks:</b> %{customdata[5]}<extra></extra>"
+    )
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+    fig.add_trace(go.Bar(
+        x=ov[period_col], y=ov["Wins"],
+        name="Wins", marker_color="#2ecc71",
+        text=ov["Wins"], textposition="inside",
+        customdata=_cd, hovertemplate=_ht,
+    ), secondary_y=False)
+    fig.add_trace(go.Bar(
+        x=ov[period_col], y=ov["Losses"],
+        name="Losses", marker_color="#e74c3c",
+        text=ov["Losses"], textposition="inside",
+        customdata=_cd, hovertemplate=_ht,
+    ), secondary_y=False)
+    _wr_rows = ov[ov["Games"] >= 10]
+    fig.add_trace(go.Scatter(
+        x=_wr_rows[period_col], y=_wr_rows["WinRate"],
+        name="Win Rate %", mode="lines+markers+text",
+        line=dict(color="#3498db", width=2), marker=dict(size=8),
+        text=_wr_rows["WinRate"].astype(str) + "%", textposition="top center",
+    ), secondary_y=True)
+    fig.update_layout(title=title, barmode="stack", legend_title_text="", hoverlabel=dict(align="left"))
+    fig.update_xaxes(categoryorder="array", categoryarray=period_order)
+    fig.update_yaxes(title_text="Games", secondary_y=False)
+    fig.update_yaxes(title_text="Win Rate (%)", range=[0, 110], secondary_y=True)
+    return fig
+
+
+def _build_period_opp_df(df, period_col, period_order):
+    """Build per-period top-opponents dataframe (column 'period' for the period key)."""
+    rows = []
+    for period in period_order:
+        df_p = df[df[period_col] == period]
+        stats_p = matchup_stats(df_p, top_n=top_n_season)
+        for rank, (_, row) in enumerate(stats_p.iterrows(), start=1):
+            rows.append({
+                "period": period,
+                "opp_label": row["opp_label"],
+                "rank": rank,
+                "Wins": int(row["Wins"]),
+                "Losses": int(row["Losses"]),
+                "Games": int(row["Games"]),
+                "WinRate": row["WinRate"],
+            })
+    if not rows:
+        return pd.DataFrame(columns=["period", "opp_label", "rank", "Wins", "Losses", "Games", "WinRate", "MyPicks", "OppPicks"])
+    opp_df = pd.DataFrame(rows)
+    _tmp = df.copy()
+    _tmp["_period"] = _tmp[period_col]
+    picks = (
+        _tmp.groupby(["_period", "opp_label"])[["player_char_name", "opp_char_name"]]
+        .apply(lambda g: pd.Series({
+            "MyPicks": char_picks_str(g["player_char_name"]),
+            "OppPicks": char_picks_str(g["opp_char_name"]),
+        }))
+        .reset_index()
+        .rename(columns={"_period": "period"})
+    )
+    return opp_df.merge(picks, on=["period", "opp_label"], how="left")
+
+
+def _make_period_opp_chart(period_opp_df, period_order, x_title, chart_title):
+    df_sub = period_opp_df[period_opp_df["period"].isin(period_order)].copy()
     fig = go.Figure()
     wins_in_legend = False
     losses_in_legend = False
-
     for rank in range(1, top_n_season + 1):
         df_rank = df_sub[df_sub["rank"] == rank].copy()
         if df_rank.empty:
@@ -524,34 +541,28 @@ def make_season_opp_chart(season_subset):
             "<extra></extra>"
         )
         fig.add_trace(go.Bar(
-            name="Wins", x=df_rank["season"], y=df_rank["Wins"],
+            name="Wins", x=df_rank["period"], y=df_rank["Wins"],
             marker_color="#2ecc71", legendgroup="Wins",
             showlegend=not wins_in_legend, offsetgroup=og,
-            customdata=_cd,
-            hovertemplate=_ht,
+            customdata=_cd, hovertemplate=_ht,
         ))
         wins_in_legend = True
         fig.add_trace(go.Bar(
-            name="Losses", x=df_rank["season"], y=df_rank["Losses"],
+            name="Losses", x=df_rank["period"], y=df_rank["Losses"],
             base=df_rank["Wins"].tolist(),
             marker_color="#e74c3c", legendgroup="Losses",
             showlegend=not losses_in_legend, offsetgroup=og,
             text=df_rank["opp_label"], textposition="outside",
             textangle=-90, textfont=dict(size=11),
             outsidetextfont=dict(size=11), constraintext="none", cliponaxis=False,
-            customdata=_cd,
-            hovertemplate=_ht,
+            customdata=_cd, hovertemplate=_ht,
         ))
         losses_in_legend = True
-
-    max_label_len = df_sub["opp_label"].str.len().max() if not df_sub.empty else 10
     label_top_margin = 40
     fig.update_layout(
-        title=f"Top {top_n_season} Opponents per Season - {player_label}",
-        barmode="group",
-        xaxis=dict(title="Season", categoryorder="array", categoryarray=season_subset),
-        yaxis_title="Games",
-        legend_title_text="",
+        title=chart_title, barmode="group",
+        xaxis=dict(title=x_title, categoryorder="array", categoryarray=period_order),
+        yaxis_title="Games", legend_title_text="",
         height=420 + label_top_margin,
         margin=dict(t=label_top_margin, b=60, l=60, r=20),
         bargap=0.15, bargroupgap=0.05,
@@ -560,7 +571,64 @@ def make_season_opp_chart(season_subset):
     return fig
 
 
-st.plotly_chart(make_season_opp_chart(seasons), use_container_width=True)
+if season_sel_breakdown == all_option:
+    # --- All-seasons view ---
+    _sov_order = sorted(pm_filtered["season"].unique(), key=lambda s: int(s[1:])) if not pm_filtered.empty else []
+    season_overview = _build_period_overview(pm_filtered, "season", _sov_order)
+    st.plotly_chart(
+        _make_overview_chart(season_overview, "season", _sov_order, f"Season Overview - {player_label}"),
+        use_container_width=True,
+    )
+    season_opp_df = _build_period_opp_df(pm_filtered, "season", _sov_order)
+    st.plotly_chart(
+        _make_period_opp_chart(season_opp_df, _sov_order, "Season", f"Top {top_n_season} Opponents per Season - {player_label}"),
+        use_container_width=True,
+    )
+
+else:
+    # --- Weekly breakdown for selected season ---
+    _sel_season = season_display_label(season_sel_breakdown)
+    _df_week = filter_by_season_option(season_sel_breakdown).copy()
+
+    if _df_week.empty:
+        st.info(f"No matches found for {_sel_season}.")
+    else:
+        # Anchor to the Monday of the week containing the season's start date
+        _season_start_ms_val = _season_start_ms.get(_sel_season, int(_df_week["finishedAt"].min()))
+        _anchor_dt = datetime.utcfromtimestamp(_season_start_ms_val / 1000)
+        _anchor_monday = _anchor_dt - timedelta(days=_anchor_dt.weekday())
+        _anchor_monday_ms = int(_anchor_monday.replace(hour=0, minute=0, second=0, microsecond=0).timestamp() * 1000)
+        _ms_per_week = 7 * 24 * 60 * 60 * 1000
+
+        _df_week["week_num"] = ((_df_week["finishedAt"] - _anchor_monday_ms) // _ms_per_week + 1).clip(lower=1).astype(int)
+
+        # Build ordered list of weeks that have matches, capped at 10
+        _week_counts = (
+            _df_week.groupby("week_num")["result"].count()
+            .sort_index()
+            .head(10)
+        )
+        _week_nums_ordered = list(_week_counts.index)
+        _df_week = _df_week[_df_week["week_num"].isin(_week_nums_ordered)]
+
+        def _week_label(w):
+            monday = _anchor_monday + timedelta(weeks=int(w) - 1)
+            n = _week_counts.get(w, 0)
+            return f"W{w}  ({monday.day} {monday.strftime('%b')})"
+
+        _df_week["week"] = _df_week["week_num"].map(_week_label)
+        _week_order = [_week_label(w) for w in _week_nums_ordered]
+
+        week_overview = _build_period_overview(_df_week, "week", _week_order)
+        st.plotly_chart(
+            _make_overview_chart(week_overview, "week", _week_order, f"{_sel_season} Weekly Overview - {player_label}"),
+            use_container_width=True,
+        )
+        week_opp_df = _build_period_opp_df(_df_week, "week", _week_order)
+        st.plotly_chart(
+            _make_period_opp_chart(week_opp_df, _week_order, "Week", f"Top {top_n_season} Opponents per Week ({_sel_season}) - {player_label}"),
+            use_container_width=True,
+        )
 
 
 # -- SECTION 3: CHARACTER MATCHUPS --------------------------------------------
