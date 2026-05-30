@@ -10,6 +10,10 @@ from datetime import datetime, timedelta
 
 st.set_page_config(page_title="Frieren TCG Player Stats", layout="wide")
 
+_primary_color = st.get_option("theme.primaryColor") or "#4fa3d1"
+_pc = _primary_color.lstrip("#")
+_primary_rgba = "rgba({},{},{},0.35)".format(int(_pc[0:2], 16), int(_pc[2:4], 16), int(_pc[4:6], 16))
+
 st.markdown(
     """
     <style>
@@ -484,7 +488,7 @@ def _make_overview_chart(ov, period_col, period_order, title):
     fig.update_layout(title=title, barmode="stack", legend_title_text="", hoverlabel=dict(align="left"))
     fig.update_xaxes(categoryorder="array", categoryarray=period_order)
     fig.update_yaxes(title_text="Games", secondary_y=False)
-    fig.update_yaxes(title_text="Win Rate (%)", range=[0, 110], secondary_y=True)
+    fig.update_yaxes(title_text="Win Rate (%)", range=[0, 110], secondary_y=True, gridcolor=_primary_rgba, griddash="dot")
     return fig
 
 
