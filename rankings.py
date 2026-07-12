@@ -167,7 +167,7 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
         xaxis={"categoryorder": "array", "categoryarray": top20["player_name"].tolist()},
         legend_title_text="Match Type", hoverlabel=dict(align="left"),
     )
-    st.plotly_chart(fig_act, use_container_width=True)
+    st.plotly_chart(fig_act, width='stretch')
 
     # ── Win rate bubble chart ──────────────────────────────────────────────────
     lb_wr = lb[lb["total_games"] >= min_g].copy()
@@ -183,7 +183,7 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
     fig_wr.update_traces(textposition="top center", textfont_size=9)
     fig_wr.add_hline(y=50, line_dash="dash", line_color="gray", annotation_text="50%")
     fig_wr.update_layout(coloraxis_showscale=False, height=520, hoverlabel=dict(align="left"))
-    st.plotly_chart(fig_wr, use_container_width=True)
+    st.plotly_chart(fig_wr, width='stretch')
 
     st.slider("Minimum games", 1, max(2, max_g), key="rnk_min_games")
 
@@ -194,7 +194,7 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
     display = lb_show[["Rank", "player_name", "total_games", "wins", "losses", "win_rate", "ranked_games", "unranked_games"]].copy()
     display.columns = ["Rank", "Player", "Games", "Wins", "Losses", "Win Rate %", "Ranked", "Unranked"]
     st.dataframe(
-        display, use_container_width=True, hide_index=True,
+        display, width='stretch', hide_index=True,
         column_config={
             "Win Rate %": st.column_config.ProgressColumn(
                 "Win Rate %", min_value=0, max_value=100, format="%.1f%%",
@@ -232,7 +232,7 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
             height=max(400, len(hm_pivot) * 35 + 150),
             hoverlabel=dict(align="left"),
         )
-        st.plotly_chart(fig_hm, use_container_width=True)
+        st.plotly_chart(fig_hm, width='stretch')
 
     # ── Character meta ─────────────────────────────────────────────────────────
     st.subheader(f"Character Stats")
@@ -265,7 +265,7 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
             height=max(320, len(cs) * 30 + 100),
             hoverlabel=dict(align="left"),
         )
-        st.plotly_chart(fig_picks, use_container_width=True)
+        st.plotly_chart(fig_picks, width='stretch')
 
     # Win rate by character
     with col_b:
@@ -293,7 +293,7 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
             height=max(320, len(cs_wr) * 30 + 100),
             hoverlabel=dict(align="left"),
         )
-        st.plotly_chart(fig_wr_char, use_container_width=True)
+        st.plotly_chart(fig_wr_char, width='stretch')
 
     # Character matchup win rate matrix
     agg = m_view.copy()
@@ -343,4 +343,4 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
             height=max(420, len(pivot) * 45 + 150),
             hoverlabel=dict(align="left"),
         )
-        st.plotly_chart(fig_mu, use_container_width=True)
+        st.plotly_chart(fig_mu, width='stretch')
