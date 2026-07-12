@@ -689,7 +689,7 @@ _my_opp_strs = [_top_opps_str(df_heatmap, "player_char_name", c, "opp_label") fo
 _opp_opp_strs = [_top_opps_str(df_heatmap, "opp_char_name", c, "opp_label") for c in _opp_chars]
 with col_pie1:
     st.plotly_chart(
-        make_char_pie(df_heatmap["player_char_name"], f"Your Character Picks - {season_label_heatmap}", _my_opp_strs),
+        make_char_pie(df_heatmap["player_char_name"], f"Your Character Picks - {season_label_heatmap} ({player_label})", _my_opp_strs),
         width="stretch",
     )
 with col_pie2:
