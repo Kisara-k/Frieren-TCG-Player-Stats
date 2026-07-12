@@ -30,6 +30,19 @@ def _leaderboard(m, player_label_map):
     return s.sort_values("total_games", ascending=False).reset_index()
 
 
+def _top_players_str(m, char_id, player_label_map, top_n=4):
+    winners = m[m["winnerCharacterId"] == char_id]["winnerId"]
+    losers = m[m["loserCharacterId"] == char_id]["loserId"]
+    sub = pd.concat([winners, losers]).value_counts()
+    total = sub.sum()
+    if total == 0:
+        return "-"
+    tops = [f"{player_label_map.get(pid, str(pid))} {sub[pid]/total*100:.0f}%" for pid in sub.index[:top_n]]
+    line1 = "  ·  ".join(tops[:2])
+    line2 = "  ·  ".join(tops[2:4]) if len(tops) > 2 else ""
+    return f"{line1}<br>{line2}" if line2 else line1
+
+
 def _char_meta(m, char_map, char_color_map):
     char_wins = m.groupby("winnerCharacterId").size().rename("wins")
     char_losses = m.groupby("loserCharacterId").size().rename("losses")
@@ -215,6 +228,7 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
     # ── Character meta ─────────────────────────────────────────────────────────
     st.subheader(f"Character Stats - {season_label}")
     cs = _char_meta(m_view, char_map, char_color_map)
+    cs["top_players"] = [_top_players_str(m_view, cid, player_label_map) for cid in cs["char_id"]]
 
     if cs.empty:
         st.info("No character data for this selection.")
@@ -227,11 +241,12 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
         fig_picks = go.Figure(go.Bar(
             x=cs["total"], y=cs["name"], orientation="h",
             marker_color=cs["color"],
-            customdata=cs[["wins", "losses", "win_rate"]].values,
+            customdata=cs[["wins", "losses", "win_rate", "top_players"]].values,
             hovertemplate=(
                 "<b>%{y}</b><br>"
                 "Picks: %{x}<br>"
-                "Wins %{customdata[0]}  |  Losses %{customdata[1]}  |  WR: %{customdata[2]}%"
+                "Wins %{customdata[0]}  |  Losses %{customdata[1]}  |  WR: %{customdata[2]}%<br>"
+                "%{customdata[3]}"
                 "<extra></extra>"
             ),
         ))
