@@ -9,7 +9,7 @@ import subprocess
 from datetime import datetime, timedelta
 import rankings as _rankings
 
-st.set_page_config(page_title="Frieren TCG Player Stats", layout="wide")
+st.set_page_config(page_title="Frieren TCG Player Stats and Leaderboard", layout="wide")
 
 _primary_color = st.get_option("theme.primaryColor") or "#4fa3d1"
 _pc = _primary_color.lstrip("#")
@@ -208,7 +208,7 @@ def char_picks_str(df_col: pd.Series, top_n: int = 4) -> str:
 
 
 # -- TABS ----------------------------------------------------------------------
-st.title("Frieren TCG Player Stats")
+st.title("Frieren TCG Player Stats and Leaderboard")
 st.caption(f"Last updated: {_last_updated_str}")
 
 _main_view = st.radio(
