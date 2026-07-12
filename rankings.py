@@ -133,6 +133,8 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
     min_g = int(st.session_state.get("rnk_min_games", _default_min))
     min_g = max(1, min(min_g, max_g))
 
+    st.subheader(f"Player Rankings")
+
     # ── Activity bar chart (top 20) ────────────────────────────────────────────
     top20 = lb.head(20).copy()
     fig_act = go.Figure([
@@ -187,7 +189,7 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
 
     # ── Player leaderboard ─────────────────────────────────────────────────────
     lb_show = lb[lb["total_games"] >= min_g].copy()
-    st.subheader(f"Player Leaderboard - {season_label} (Top {len(lb_show)})")
+    st.markdown(f"<p style='font-size:17px;font-weight:500;margin:0 0 4px 0;'>Player Leaderboard - {season_label} (Top {len(lb_show)})</p>", unsafe_allow_html=True)
     lb_show.insert(0, "Rank", range(1, len(lb_show) + 1))
     display = lb_show[["Rank", "player_name", "total_games", "wins", "losses", "win_rate", "ranked_games", "unranked_games"]].copy()
     display.columns = ["Rank", "Player", "Games", "Wins", "Losses", "Win Rate %", "Ranked", "Unranked"]
@@ -233,7 +235,7 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
         st.plotly_chart(fig_hm, use_container_width=True)
 
     # ── Character meta ─────────────────────────────────────────────────────────
-    st.subheader(f"Character Stats - {season_label}")
+    st.subheader(f"Character Stats")
     cs = _char_meta(m_view, char_map, char_color_map)
     cs["top_players"] = [_top_players_str(m_view, cid, player_label_map) for cid in cs["char_id"]]
 
@@ -258,7 +260,7 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
             ),
         ))
         fig_picks.update_layout(
-            title="Character Picked (all games)", xaxis_title="Games", yaxis_title="",
+            title=f"Character Picked - {season_label}", xaxis_title="Games", yaxis_title="",
             yaxis={"categoryorder": "total ascending"},
             height=max(320, len(cs) * 30 + 100),
             hoverlabel=dict(align="left"),
@@ -287,7 +289,7 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
         fig_wr_char.add_vline(x=50, line_dash="dash", line_color="gray", annotation_text="50%")
         fig_wr_char.update_xaxes(range=[0, 110])
         fig_wr_char.update_layout(
-            title="Win Rate by Character", xaxis_title="Win Rate (%)", yaxis_title="",
+            title=f"Win Rate by Character - {season_label}", xaxis_title="Win Rate (%)", yaxis_title="",
             height=max(320, len(cs_wr) * 30 + 100),
             hoverlabel=dict(align="left"),
         )
