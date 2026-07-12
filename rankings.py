@@ -101,9 +101,6 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
     c3.metric("Ranked Matches", f"{ranked_matches:,}")
     c4.metric("Ranked %", f"{ranked_matches / total_matches * 100:.0f}%" if total_matches else "-")
 
-    # ── Player leaderboard ─────────────────────────────────────────────────────
-    st.subheader(f"Player Leaderboard - {season_label}")
-
     max_g = int(lb["total_games"].max()) if not lb.empty else 1
     _default_min = 1
     for _t in range(1, max_g + 1):
@@ -111,21 +108,10 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
             _default_min = _t
             break
 
-    min_g = st.slider(
-        "Minimum games", 1, max(2, max_g), _default_min, key="rnk_min_games",
-    )
-    lb_show = lb[lb["total_games"] >= min_g].copy()
-    lb_show.insert(0, "Rank", range(1, len(lb_show) + 1))
-    display = lb_show[["Rank", "player_name", "total_games", "wins", "losses", "win_rate", "ranked_games", "unranked_games"]].copy()
-    display.columns = ["Rank", "Player", "Games", "Wins", "Losses", "Win Rate %", "Ranked", "Unranked"]
-    st.dataframe(
-        display, use_container_width=True, hide_index=True,
-        column_config={
-            "Win Rate %": st.column_config.ProgressColumn(
-                "Win Rate %", min_value=0, max_value=100, format="%.1f%%",
-            ),
-        },
-    )
+    # Read slider value from session state so the bubble chart and table
+    # can use it before the slider widget is rendered below.
+    min_g = int(st.session_state.get("rnk_min_games", _default_min))
+    min_g = max(1, min(min_g, max_g))
 
     # ── Activity bar chart (top 20) ────────────────────────────────────────────
     top20 = lb.head(20).copy()
@@ -170,12 +156,29 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
         text="player_name",
         hover_data={"player_name": True, "wins": True, "losses": True, "total_games": True, "win_rate": True},
         labels={"total_games": "Games Played", "win_rate": "Win Rate (%)", "player_name": "Player"},
-        title=f"Win Rate vs Activity - {season_label} (≥{min_g} games)",
+        title=f"Win Rate vs Activity - {season_label} (Top {len(lb_wr)})",
     )
     fig_wr.update_traces(textposition="top center", textfont_size=9)
     fig_wr.add_hline(y=50, line_dash="dash", line_color="gray", annotation_text="50%")
     fig_wr.update_layout(coloraxis_showscale=False, height=520, hoverlabel=dict(align="left"))
     st.plotly_chart(fig_wr, use_container_width=True)
+
+    st.slider("Minimum games", 1, max(2, max_g), _default_min, key="rnk_min_games")
+
+    # ── Player leaderboard ─────────────────────────────────────────────────────
+    lb_show = lb[lb["total_games"] >= min_g].copy()
+    st.subheader(f"Player Leaderboard - {season_label} (Top {len(lb_show)})")
+    lb_show.insert(0, "Rank", range(1, len(lb_show) + 1))
+    display = lb_show[["Rank", "player_name", "total_games", "wins", "losses", "win_rate", "ranked_games", "unranked_games"]].copy()
+    display.columns = ["Rank", "Player", "Games", "Wins", "Losses", "Win Rate %", "Ranked", "Unranked"]
+    st.dataframe(
+        display, use_container_width=True, hide_index=True,
+        column_config={
+            "Win Rate %": st.column_config.ProgressColumn(
+                "Win Rate %", min_value=0, max_value=100, format="%.1f%%",
+            ),
+        },
+    )
 
     # ── Season activity heatmap (All Seasons only) ─────────────────────────────
     if season_sel == _ALL_OPT and len(all_seasons) > 1:
@@ -210,7 +213,7 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
         st.plotly_chart(fig_hm, use_container_width=True)
 
     # ── Character meta ─────────────────────────────────────────────────────────
-    st.subheader(f"Character Meta - {season_label}")
+    st.subheader(f"Character Stats - {season_label}")
     cs = _char_meta(m_view, char_map, char_color_map)
 
     if cs.empty:
@@ -233,16 +236,16 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
             ),
         ))
         fig_picks.update_layout(
-            title="Pick Share (all games)", xaxis_title="Games", yaxis_title="",
+            title="Character Picked (all games)", xaxis_title="Games", yaxis_title="",
             yaxis={"categoryorder": "total ascending"},
             height=max(320, len(cs) * 30 + 100),
             hoverlabel=dict(align="left"),
         )
         st.plotly_chart(fig_picks, use_container_width=True)
 
-    # Win rate by character (min 10 games)
+    # Win rate by character
     with col_b:
-        cs_wr = cs[cs["total"] >= 10].sort_values("win_rate", ascending=True)
+        cs_wr = cs.sort_values("win_rate", ascending=True)
         fig_wr_char = go.Figure(go.Bar(
             x=cs_wr["win_rate"], y=cs_wr["name"], orientation="h",
             marker=dict(
@@ -262,7 +265,7 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
         fig_wr_char.add_vline(x=50, line_dash="dash", line_color="gray", annotation_text="50%")
         fig_wr_char.update_xaxes(range=[0, 110])
         fig_wr_char.update_layout(
-            title="Win Rate by Character (≥10 games)", xaxis_title="Win Rate (%)", yaxis_title="",
+            title="Win Rate by Character", xaxis_title="Win Rate (%)", yaxis_title="",
             height=max(320, len(cs_wr) * 30 + 100),
             hoverlabel=dict(align="left"),
         )
@@ -284,7 +287,7 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
         pivot = mu_full.pivot(index="winner_char", columns="loser_char", values="win_rate")
         g_pivot = mu_full.pivot(index="winner_char", columns="loser_char", values="total").fillna(0).astype(int)
 
-        char_order = cs["name"].tolist()
+        char_order = sorted(cs["name"].dropna().tolist())
         pivot = pivot.reindex(index=char_order, columns=char_order)
         g_pivot = g_pivot.reindex(index=char_order, columns=char_order)
 
@@ -311,6 +314,8 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
         fig_mu.update_layout(
             title=f"Character Matchup Win Rates - {season_label}",
             xaxis_title="Opponent Character", yaxis_title="Player's Character",
+            xaxis=dict(autorange="reversed"),
+            yaxis=dict(autorange="reversed"),
             height=max(420, len(pivot) * 45 + 150),
             hoverlabel=dict(align="left"),
         )
