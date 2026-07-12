@@ -212,7 +212,7 @@ st.title("Frieren TCG Player Stats")
 st.caption(f"Last updated: {_last_updated_str}")
 
 _main_view = st.radio(
-    "View", ["Player Stats", "Rankings"],
+    "View", ["Player Stats", "Leaderboard"],
     horizontal=True, key="main_view", label_visibility="collapsed",
 )
 
@@ -788,5 +788,5 @@ if _main_view == "Player Stats":
 
 
 # -- TAB: RANKINGS -------------------------------------------------------------
-elif _main_view == "Rankings":
+elif _main_view == "Leaderboard":
     _rankings.render(matches, player_label_map, _reset_to_season, _reset_to_ladder_name, char_map, char_color_map)
