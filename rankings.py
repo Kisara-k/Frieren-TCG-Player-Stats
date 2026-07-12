@@ -121,6 +121,13 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
             _default_min = _t
             break
 
+    # Reset slider when the filter context (season/ladder/ranked) changes so
+    # the stale value from the previous context isn't used.
+    _ctx = (season_sel, ladder_mode, ranked_mode)
+    if st.session_state.get("rnk_filter_ctx") != _ctx:
+        st.session_state["rnk_min_games"] = _default_min
+        st.session_state["rnk_filter_ctx"] = _ctx
+
     # Read slider value from session state so the bubble chart and table
     # can use it before the slider widget is rendered below.
     min_g = int(st.session_state.get("rnk_min_games", _default_min))
@@ -176,7 +183,7 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
     fig_wr.update_layout(coloraxis_showscale=False, height=520, hoverlabel=dict(align="left"))
     st.plotly_chart(fig_wr, use_container_width=True)
 
-    st.slider("Minimum games", 1, max(2, max_g), _default_min, key="rnk_min_games")
+    st.slider("Minimum games", 1, max(2, max_g), key="rnk_min_games")
 
     # ── Player leaderboard ─────────────────────────────────────────────────────
     lb_show = lb[lb["total_games"] >= min_g].copy()
