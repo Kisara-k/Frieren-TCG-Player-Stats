@@ -89,7 +89,7 @@ for _, _r in ladder_resets.iterrows():
     _snum = int(_classic_resets.loc[_mask, "season_num"].iloc[-1]) if _mask.any() else 1
     _reset_to_season[int(_r["id"])] = f"S{_snum}"
 
-# season label -> start timestamp (ms) — used for weekly breakdown
+# season label -> start timestamp (ms) - used for weekly breakdown
 _season_start_ms = {
     f"S{int(row['season_num'])}": int(row["startDate"])
     for _, row in _classic_resets.iterrows()
@@ -673,7 +673,7 @@ if _main_view == "Player Stats":
                     sub = df[df[filter_col] == char][opp_col].dropna().value_counts()
                     total = sub.sum()
                     if total == 0:
-                        return "—"
+                        return "-"
                     tops = [f"{o} {sub[o]/total*100:.0f}%" for o in sub.index[:top_n]]
                     line1 = "  ·  ".join(tops[:2])
                     line2 = "  ·  ".join(tops[2:4]) if len(tops) > 2 else ""

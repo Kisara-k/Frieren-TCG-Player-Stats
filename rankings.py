@@ -99,10 +99,10 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
     c1.metric("Active Players", len(lb))
     c2.metric("Total Matches", f"{total_matches:,}")
     c3.metric("Ranked Matches", f"{ranked_matches:,}")
-    c4.metric("Ranked %", f"{ranked_matches / total_matches * 100:.0f}%" if total_matches else "—")
+    c4.metric("Ranked %", f"{ranked_matches / total_matches * 100:.0f}%" if total_matches else "-")
 
     # ── Player leaderboard ─────────────────────────────────────────────────────
-    st.subheader(f"Player Leaderboard — {season_label}")
+    st.subheader(f"Player Leaderboard - {season_label}")
 
     max_g = int(lb["total_games"].max()) if not lb.empty else 1
     _default_min = 1
@@ -154,7 +154,7 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
         ),
     ])
     fig_act.update_layout(
-        title=f"Top 20 Most Active Players — {season_label}",
+        title=f"Top 20 Most Active Players - {season_label}",
         barmode="stack", xaxis_title="Player", yaxis_title="Games",
         xaxis={"categoryorder": "array", "categoryarray": top20["player_name"].tolist()},
         legend_title_text="Match Type", hoverlabel=dict(align="left"),
@@ -170,7 +170,7 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
         text="player_name",
         hover_data={"player_name": True, "wins": True, "losses": True, "total_games": True, "win_rate": True},
         labels={"total_games": "Games Played", "win_rate": "Win Rate (%)", "player_name": "Player"},
-        title=f"Win Rate vs Activity — {season_label} (≥{min_g} games)",
+        title=f"Win Rate vs Activity - {season_label} (≥{min_g} games)",
     )
     fig_wr.update_traces(textposition="top center", textfont_size=9)
     fig_wr.add_hline(y=50, line_dash="dash", line_color="gray", annotation_text="50%")
@@ -179,7 +179,7 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
 
     # ── Season activity heatmap (All Seasons only) ─────────────────────────────
     if season_sel == _ALL_OPT and len(all_seasons) > 1:
-        st.subheader("Season Activity — Top 20 Players")
+        st.subheader("Season Activity - Top 20 Players")
         top_pids = set(lb.head(20)["player_id"])
         w_s = m_filtered[m_filtered["winnerId"].isin(top_pids)][["winnerId", "season"]].rename(columns={"winnerId": "player_id"})
         l_s = m_filtered[m_filtered["loserId"].isin(top_pids)][["loserId", "season"]].rename(columns={"loserId": "player_id"})
@@ -198,7 +198,7 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
             colorscale="Blues",
             text=hm_pivot.values.astype(int),
             texttemplate="%{text}",
-            hovertemplate="<b>%{y}</b> — %{x}<br>Games: %{z}<extra></extra>",
+            hovertemplate="<b>%{y}</b> - %{x}<br>Games: %{z}<extra></extra>",
             colorbar=dict(title="Games"),
         ))
         fig_hm.update_layout(
@@ -210,7 +210,7 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
         st.plotly_chart(fig_hm, use_container_width=True)
 
     # ── Character meta ─────────────────────────────────────────────────────────
-    st.subheader(f"Character Meta — {season_label}")
+    st.subheader(f"Character Meta - {season_label}")
     cs = _char_meta(m_view, char_map, char_color_map)
 
     if cs.empty:
@@ -309,7 +309,7 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
             hovertemplate="<b>%{y}</b> vs <b>%{x}</b><br>Win Rate: %{z:.1f}%<extra></extra>",
         ))
         fig_mu.update_layout(
-            title=f"Character Matchup Win Rates — {season_label}",
+            title=f"Character Matchup Win Rates - {season_label}",
             xaxis_title="Opponent Character", yaxis_title="Player's Character",
             height=max(420, len(pivot) * 45 + 150),
             hoverlabel=dict(align="left"),
