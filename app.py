@@ -256,7 +256,7 @@ with col_id:
     )
 with col_btn:
     # Fallback button for mouse-only users
-    if st.button("Analyze", type="primary", use_container_width=True):
+    if st.button("Analyze", type="primary", width="stretch"):
         _raw = st.session_state.get("discord_id_input", "").strip()
         _name = st.session_state.get("player_name_select")
         if _raw and _raw.isdigit():
@@ -399,7 +399,7 @@ fig1.update_traces(
     )
 )
 fig1.update_layout(legend_title_text="Result", hoverlabel=dict(align="left"))
-st.plotly_chart(fig1, use_container_width=True)
+st.plotly_chart(fig1, width="stretch")
 
 _max_threshold = 50
 _default_min = _max_threshold
@@ -423,7 +423,7 @@ fig2.update_layout(
     height=max(420, len(wr_df) * 28 + 120),
     yaxis={"categoryorder": "array", "categoryarray": wr_df["opp_label"].tolist()},
 )
-st.plotly_chart(fig2, use_container_width=True)
+st.plotly_chart(fig2, width="stretch")
 
 
 # -- SECTION 2: PER-SEASON BREAKDOWN -------------------------------------------
@@ -581,12 +581,12 @@ if season_sel_breakdown == all_option:
     season_overview = _build_period_overview(pm_filtered, "season", _sov_order)
     st.plotly_chart(
         _make_overview_chart(season_overview, "season", _sov_order, f"Season Overview - {player_label}"),
-        use_container_width=True,
+        width="stretch",
     )
     season_opp_df = _build_period_opp_df(pm_filtered, "season", _sov_order)
     st.plotly_chart(
         _make_period_opp_chart(season_opp_df, _sov_order, "Season", f"Top {top_n_season} Opponents per Season - {player_label}"),
-        use_container_width=True,
+        width="stretch",
     )
 
 else:
@@ -626,12 +626,12 @@ else:
         week_overview = _build_period_overview(_df_week, "week", _week_order)
         st.plotly_chart(
             _make_overview_chart(week_overview, "week", _week_order, f"{_sel_season} Weekly Overview - {player_label}"),
-            use_container_width=True,
+            width="stretch",
         )
         week_opp_df = _build_period_opp_df(_df_week, "week", _week_order)
         st.plotly_chart(
             _make_period_opp_chart(week_opp_df, _week_order, "Week", f"Top {top_n_season} Opponents per Week ({_sel_season}) - {player_label}"),
-            use_container_width=True,
+            width="stretch",
         )
 
 
@@ -690,12 +690,12 @@ _opp_opp_strs = [_top_opps_str(df_heatmap, "opp_char_name", c, "opp_label") for 
 with col_pie1:
     st.plotly_chart(
         make_char_pie(df_heatmap["player_char_name"], f"Your Character Picks - {season_label_heatmap}", _my_opp_strs),
-        use_container_width=True,
+        width="stretch",
     )
 with col_pie2:
     st.plotly_chart(
         make_char_pie(df_heatmap["opp_char_name"], f"Opponent Character Picks - {season_label_heatmap}", _opp_opp_strs),
-        use_container_width=True,
+        width="stretch",
     )
 
 
@@ -783,7 +783,7 @@ def char_heatmap(df, title):
 if df_heatmap["player_char_name"].notna().any():
     st.plotly_chart(
         char_heatmap(df_heatmap, f"Character Matchup Win Rate - {season_label_heatmap} ({player_label})"),
-        use_container_width=True,
+        width="stretch",
     )
 else:
     st.info("No character data for this selection.")
