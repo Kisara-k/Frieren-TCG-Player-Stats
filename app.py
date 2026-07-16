@@ -95,14 +95,20 @@ _season_start_ms = {
     for _, row in _classic_resets.iterrows()
 }
 
-player_label_map = {
-    row["id"]: (
-        row["name"]
-        if ("name" in players.columns and pd.notna(row.get("name")) and str(row.get("name", "")).strip() != "")
-        else str(row["id"])
-    )
-    for _, row in players.iterrows()
+def _build_player_label(row) -> str:
+    if "name" in players.columns and pd.notna(row.get("name")) and str(row.get("name", "")).strip():
+        return str(row["name"])
+    if pd.notna(row.get("discordName")) and str(row.get("discordName", "")).strip():
+        return str(row["discordName"])
+    return str(row["discordId"])
+
+player_label_map: dict[int, str] = {
+    row["id"]: _build_player_label(row) for _, row in players.iterrows()
 }
+for _pid in pd.concat([matches["winnerId"], matches["loserId"]]).unique():
+    if _pid not in player_label_map:
+        player_label_map[_pid] = f"player_{_pid}"
+
 char_map = characters.set_index("id")["name"].to_dict()
 char_color_map = characters.set_index("name")["Hex"].to_dict() if "Hex" in characters.columns else {}
 
@@ -117,11 +123,7 @@ def build_player_matches(discord_id_str: str):
         return None, None, None
 
     player_id = int(row["id"].values[0])
-    player_label = (
-        row["name"].values[0]
-        if ("name" in players.columns and pd.notna(row["name"].values[0]) and str(row["name"].values[0]).strip() != "")
-        else str(player_id)
-    )
+    player_label = player_label_map[player_id]
 
     as_winner = matches[matches["winnerId"] == player_id].copy()
     as_winner["result"] = "Win"
