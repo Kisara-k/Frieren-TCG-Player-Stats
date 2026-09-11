@@ -130,28 +130,14 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
 
     all_seasons = sorted(m_base["season"].dropna().unique(), key=lambda s: int(s[1:]))
     all_seasons_desc = list(reversed(all_seasons))
-
-    # Build season counts in the current ladder/match-type context. Streamlit
-    # reruns after either radio changes, so these labels stay in sync.
-    count_matches = m_base
-    if not st.session_state.get("rnk_include_self", False):
-        count_matches = count_matches[count_matches["winnerId"] != count_matches["loserId"]]
-    count_ladder = _LADDER_RAW.get(st.session_state.get("rnk_ladder", "Classic"))
-    if count_ladder:
-        count_matches = count_matches[count_matches["ladder_name"] == count_ladder]
-    count_ranked_mode = st.session_state.get("rnk_ranked", "Ranked")
-    if count_ranked_mode == "Ranked":
-        count_matches = count_matches[count_matches["ranked_flag"] == 1]
-    elif count_ranked_mode == "Unranked":
-        count_matches = count_matches[count_matches["ranked_flag"] == 0]
-    season_game_counts = count_matches["season"].value_counts().to_dict()
+    season_game_counts = m_base["season"].value_counts().to_dict()
 
     # --- Filters ---
     col_s, col_l, col_r = st.columns([1.5, 2.5, 2])
     _ALL_OPT = "All Seasons"
 
     def _season_option_label(season):
-        games = len(count_matches) if season == _ALL_OPT else season_game_counts.get(season, 0)
+        games = len(m_base) if season == _ALL_OPT else season_game_counts.get(season, 0)
         return f"{season} ({games:,} games)"
 
     if "rnk_seasons" not in st.session_state:

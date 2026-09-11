@@ -298,26 +298,11 @@ if _main_view == "Player Stats":
                 _LADDER_OPTIONS = ["Classic", "All", "Blitz", "Slow", "Prescience"]
                 _LADDER_RAW = {"Classic": "classic", "Blitz": "blitz", "Slow": "slow", "Prescience": "classic-prescience", "All": None}
 
-                _count_ladder_mode = st.session_state.get("ladder_filter", "Classic")
-                _count_ranked_mode = st.session_state.get("ranked_filter", "All")
-                _count_include_self = st.session_state.get("include_self", False)
-                _pm_count_context = pm
-                _count_ladder_raw = _LADDER_RAW.get(_count_ladder_mode)
-                if _count_ladder_raw is not None:
-                    _pm_count_context = _pm_count_context[_pm_count_context["ladder_name"] == _count_ladder_raw]
-                if _count_ranked_mode == "Ranked":
-                    _pm_count_context = _pm_count_context[_pm_count_context["ranked"] == 1]
-                elif _count_ranked_mode == "Unranked":
-                    _pm_count_context = _pm_count_context[_pm_count_context["ranked"] == 0]
-                if not _count_include_self:
-                    _pm_count_context = _pm_count_context[_pm_count_context["winnerId"] != _pm_count_context["loserId"]]
-
                 _all_seasons = sorted(pm["season"].dropna().unique(), key=lambda s: int(s[1:]))
-                _season_counts = _pm_count_context["season"].value_counts().to_dict()
                 _ALL_SEASONS = "All Seasons"
 
                 def _player_season_label(season):
-                    games = len(_pm_count_context) if season == _ALL_SEASONS else _season_counts.get(season, 0)
+                    games = len(pm) if season == _ALL_SEASONS else season_counts.get(season, 0)
                     return f"{season} ({games:,} games)"
 
                 _player_season_key = f"player_seasons_{confirmed_id}"
