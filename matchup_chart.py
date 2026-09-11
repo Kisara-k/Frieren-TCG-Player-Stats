@@ -38,8 +38,19 @@ def make_character_matchup_chart(
     losses = matrix("Losses", 0).astype(int)
 
     labels = [
-        [f"{rate:.0f}%<br>({games.loc[row, col]})" if pd.notna(rate) else ""
+        [str(games.loc[row, col]) if pd.notna(rate) else ""
          for col, rate in win_rate.loc[row].items()]
+        for row in win_rate.index
+    ]
+    hover_labels = [
+        [
+            (
+                f"<b>{row}</b> vs <b>{col}</b><br>"
+                f"Win Rate: {rate:.1f}%<br>Games: {games.loc[row, col]}"
+            )
+            if pd.notna(rate) else ""
+            for col, rate in win_rate.loc[row].items()
+        ]
         for row in win_rate.index
     ]
     row_wins, row_losses = wins.sum(axis=1), losses.sum(axis=1)
@@ -53,14 +64,16 @@ def make_character_matchup_chart(
     )
     fig.add_trace(go.Heatmap(
         z=win_rate.values, x=positions, y=positions,
-        text=labels, texttemplate="%{text}",
-        colorscale="RdYlGn", zmin=0, zmax=100, zmid=50,
+        text=labels, texttemplate="<b>%{text}</b>", textfont=dict(size=12),
+        colorscale=[
+            [0.0, "#d73027"],
+            [0.5, "#ffffff"],
+            [1.0, "#1a9850"],
+        ],
+        zmin=0, zmax=100, zmid=50,
         colorbar=dict(title="Win %", x=1.12),
-        hovertemplate=(
-            "<b>%{y}</b> vs <b>%{x}</b><br>"
-            "Win Rate: %{z:.1f}%<br>Games: %{customdata}<extra></extra>"
-        ),
-        customdata=games.values,
+        hovertext=hover_labels,
+        hovertemplate="%{hovertext}<extra></extra>",
     ), row=1, col=2)
 
     fig.add_trace(go.Bar(
