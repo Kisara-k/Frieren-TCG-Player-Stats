@@ -3,11 +3,11 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import numpy as np
 import os
 import subprocess
 from datetime import datetime, timedelta
 import rankings as _rankings
+from matchup_chart import make_character_matchup_chart
 
 st.set_page_config(page_title="Frieren TCG Player Stats and Leaderboard", layout="wide")
 
@@ -699,90 +699,12 @@ if _main_view == "Player Stats":
                     )
 
 
-                def char_heatmap(df, title):
-                    agg = df.groupby(["player_char_name", "opp_char_name"]).agg(
-                        Games=("result", "count"),
-                        Wins=("result", lambda x: (x == "Win").sum()),
-                    ).reset_index()
-                    agg["WinRate"] = (agg["Wins"] / agg["Games"] * 100).round(1)
-                    agg["Losses"] = agg["Games"] - agg["Wins"]
-
-                    wr_matrix = agg.pivot(index="player_char_name", columns="opp_char_name", values="WinRate")
-                    g_matrix  = agg.pivot(index="player_char_name", columns="opp_char_name", values="Games")
-                    w_matrix  = agg.pivot(index="player_char_name", columns="opp_char_name", values="Wins").fillna(0)
-                    l_matrix  = agg.pivot(index="player_char_name", columns="opp_char_name", values="Losses").fillna(0)
-
-                    row_wins   = w_matrix.sum(axis=1).astype(int)
-                    row_losses = l_matrix.sum(axis=1).astype(int)
-                    col_wins   = w_matrix.sum(axis=0).astype(int)
-                    col_losses = l_matrix.sum(axis=0).astype(int)
-
-                    text_vals = []
-                    for r in wr_matrix.index:
-                        row_text = []
-                        for c in wr_matrix.columns:
-                            wr = wr_matrix.loc[r, c]
-                            g  = g_matrix.loc[r, c] if r in g_matrix.index and c in g_matrix.columns else np.nan
-                            row_text.append(f"{wr:.0f}%<br>({int(g)})" if pd.notna(wr) else "")
-                        text_vals.append(row_text)
-
-                    fig = make_subplots(
-                        rows=2, cols=2,
-                        column_widths=[0.15, 0.85],
-                        row_heights=[0.85, 0.15],
-                        shared_xaxes="columns",
-                        shared_yaxes="rows",
-                        horizontal_spacing=0.01,
-                        vertical_spacing=0.01,
-                    )
-                    fig.add_trace(go.Heatmap(
-                        z=wr_matrix.values,
-                        x=list(wr_matrix.columns),
-                        y=list(wr_matrix.index),
-                        text=text_vals,
-                        texttemplate="%{text}",
-                        colorscale="Blues",
-                        zmin=0, zmax=100,
-                        colorbar=dict(title="Win %"),
-                    ), row=1, col=2)
-                    fig.add_trace(go.Bar(
-                        x=row_wins[wr_matrix.index].values,
-                        y=list(wr_matrix.index),
-                        orientation="h", marker_color="#2ecc71",
-                        name="Wins", legendgroup="Wins", showlegend=False,
-                    ), row=1, col=1)
-                    fig.add_trace(go.Bar(
-                        x=row_losses[wr_matrix.index].values,
-                        y=list(wr_matrix.index),
-                        orientation="h", marker_color="#e74c3c",
-                        name="Losses", legendgroup="Losses", showlegend=False,
-                    ), row=1, col=1)
-                    fig.add_trace(go.Bar(
-                        x=list(wr_matrix.columns),
-                        y=col_wins[wr_matrix.columns].values,
-                        marker_color="#2ecc71", name="Wins", legendgroup="Wins", showlegend=False,
-                    ), row=2, col=2)
-                    fig.add_trace(go.Bar(
-                        x=list(wr_matrix.columns),
-                        y=col_losses[wr_matrix.columns].values,
-                        marker_color="#e74c3c", name="Losses", legendgroup="Losses", showlegend=False,
-                    ), row=2, col=2)
-
-                    fig.update_xaxes(autorange="reversed", showticklabels=True, row=1, col=1)
-                    fig.update_yaxes(title_text="Player's Character", row=1, col=1)
-                    fig.update_xaxes(title_text="Opponent's Character", row=2, col=2)
-                    fig.update_yaxes(showticklabels=True, row=2, col=2)
-                    fig.update_layout(
-                        title=title,
-                        barmode="stack",
-                        height=max(420, len(wr_matrix.index) * 55 + 200),
-                    )
-                    return fig
-
-
                 if df_heatmap["player_char_name"].notna().any():
                     st.plotly_chart(
-                        char_heatmap(df_heatmap, f"Character Matchup Win Rate - {season_label_heatmap} ({player_label})"),
+                        make_character_matchup_chart(
+                            df_heatmap,
+                            f"Character Matchup Win Rate - {season_label_heatmap} ({player_label})",
+                        ),
                         width='stretch',
                     )
                 else:

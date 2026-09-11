@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+from matchup_chart import make_character_matchup_chart
 
 _LADDER_OPTIONS = ["Classic", "All", "Blitz", "Slow", "Prescience"]
 _LADDER_RAW = {
@@ -194,7 +195,7 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
     display = lb_show[["Rank", "player_name", "total_games", "wins", "losses", "win_rate", "ranked_games", "unranked_games"]].copy()
     display.columns = ["Rank", "Player", "Games", "Wins", "Losses", "Win Rate %", "Ranked", "Unranked"]
     st.dataframe(
-        display, width='stretch', hide_index=True,
+        display, use_container_width=True, hide_index=True,
         column_config={
             "Win Rate %": st.column_config.ProgressColumn(
                 "Win Rate %", min_value=0, max_value=100, format="%.1f%%",
@@ -272,10 +273,7 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
         cs_wr = cs.sort_values("win_rate", ascending=True)
         fig_wr_char = go.Figure(go.Bar(
             x=cs_wr["win_rate"], y=cs_wr["name"], orientation="h",
-            marker=dict(
-                color=cs_wr["win_rate"],
-                colorscale="RdYlGn", cmin=0, cmax=100,
-            ),
+            marker_color=cs_wr["color"],
             customdata=cs_wr[["wins", "losses", "total"]].values,
             hovertemplate=(
                 "<b>%{y}</b><br>"
@@ -295,52 +293,22 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
         )
         st.plotly_chart(fig_wr_char, width='stretch')
 
-    # Character matchup win rate matrix
-    agg = m_view.copy()
-    agg["winner_char"] = agg["winnerCharacterId"].map(char_map)
-    agg["loser_char"] = agg["loserCharacterId"].map(char_map)
-    agg = agg.dropna(subset=["winner_char", "loser_char"])
-    if not agg.empty:
-        # Each matchup: winner_char beat loser_char
-        mu = agg.groupby(["winner_char", "loser_char"]).size().reset_index(name="wins")
-        mu_rev = agg.groupby(["loser_char", "winner_char"]).size().reset_index(name="losses")
-        mu_rev.columns = ["winner_char", "loser_char", "losses"]
-        mu_full = mu.merge(mu_rev, on=["winner_char", "loser_char"], how="outer").fillna(0)
-        mu_full["total"] = mu_full["wins"] + mu_full["losses"]
-        mu_full["win_rate"] = (mu_full["wins"] / mu_full["total"] * 100).round(1)
-        pivot = mu_full.pivot(index="winner_char", columns="loser_char", values="win_rate")
-        g_pivot = mu_full.pivot(index="winner_char", columns="loser_char", values="total").fillna(0).astype(int)
-
-        char_order = sorted(cs["name"].dropna().tolist())
-        pivot = pivot.reindex(index=char_order, columns=char_order)
-        g_pivot = g_pivot.reindex(index=char_order, columns=char_order)
-
-        text_vals = []
-        for r in pivot.index:
-            row_t = []
-            for c in pivot.columns:
-                wr = pivot.loc[r, c]
-                g = g_pivot.loc[r, c]
-                row_t.append(f"{wr:.0f}%<br>({g})" if pd.notna(wr) and g > 0 else "")
-            text_vals.append(row_t)
-
-        fig_mu = go.Figure(go.Heatmap(
-            z=pivot.values,
-            x=list(pivot.columns),
-            y=list(pivot.index),
-            text=text_vals,
-            texttemplate="%{text}",
-            colorscale="RdYlGn",
-            zmin=0, zmax=100,
-            colorbar=dict(title="Win %"),
-            hovertemplate="<b>%{y}</b> vs <b>%{x}</b><br>Win Rate: %{z:.1f}%<extra></extra>",
-        ))
-        fig_mu.update_layout(
-            title=f"Character Matchup Win Rates - {season_label}",
-            xaxis_title="Opponent Character", yaxis_title="Player's Character",
-            xaxis=dict(autorange="reversed"),
-            yaxis=dict(autorange="reversed"),
-            height=max(420, len(pivot) * 45 + 150),
-            hoverlabel=dict(align="left"),
+    # Character matchup win rate matrix. Add both players' perspectives so the
+    # shared chart can aggregate wins/losses identically to the player view.
+    matchup_wins = m_view[["winnerCharacterId", "loserCharacterId"]].rename(columns={
+        "winnerCharacterId": "player_char_id", "loserCharacterId": "opp_char_id",
+    })
+    matchup_wins["result"] = "Win"
+    matchup_losses = m_view[["loserCharacterId", "winnerCharacterId"]].rename(columns={
+        "loserCharacterId": "player_char_id", "winnerCharacterId": "opp_char_id",
+    })
+    matchup_losses["result"] = "Loss"
+    matchup_data = pd.concat([matchup_wins, matchup_losses], ignore_index=True)
+    matchup_data["player_char_name"] = matchup_data["player_char_id"].map(char_map)
+    matchup_data["opp_char_name"] = matchup_data["opp_char_id"].map(char_map)
+    matchup_data = matchup_data.dropna(subset=["player_char_name", "opp_char_name"])
+    if not matchup_data.empty:
+        fig_mu = make_character_matchup_chart(
+            matchup_data, f"Character Matchup Win Rates - {season_label}",
         )
         st.plotly_chart(fig_mu, width='stretch')
