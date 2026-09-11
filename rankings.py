@@ -417,7 +417,8 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
             ),
         ))
         fig_picks.update_layout(
-            title=f"Character Picked - {season_label}", xaxis_title="Games", yaxis_title="",
+            title=f"Character Picked - {season_label} (Top {top_n_players} Players)",
+            xaxis_title="Games", yaxis_title="",
             yaxis={"categoryorder": "total ascending"},
             height=max(320, len(cs) * 30 + 100),
             hoverlabel=dict(align="left"),
@@ -444,7 +445,8 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
         fig_wr_char.add_vline(x=50, line_dash="dash", line_color="gray", annotation_text="50%")
         fig_wr_char.update_xaxes(range=[0, 110])
         fig_wr_char.update_layout(
-            title=f"Win Rate by Character - {season_label}", xaxis_title="Win Rate (%)", yaxis_title="",
+            title=f"Win Rate by Character - {season_label} (Top {top_n_players} Players)",
+            xaxis_title="Win Rate (%)", yaxis_title="",
             height=max(320, len(cs_wr) * 30 + 100),
             hoverlabel=dict(align="left"),
         )
@@ -466,6 +468,7 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
     matchup_data = matchup_data.dropna(subset=["player_char_name", "opp_char_name"])
     if not matchup_data.empty:
         fig_mu = make_character_matchup_chart(
-            matchup_data, f"Character Matchup Win Rates - {season_label}",
+            matchup_data,
+            f"Character Matchup Win Rates - {season_label} (Top {top_n_players} Players)",
         )
         st.plotly_chart(fig_mu, width='stretch')
