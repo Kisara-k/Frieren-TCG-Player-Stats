@@ -94,16 +94,18 @@ def make_character_matchup_chart(
     ), row=2, col=2)
 
     # The marginal plots label the left/bottom; the heatmap repeats the same
-    # alphabetical axes on the top/right. scaleanchor keeps every cell square
-    # as Plotly responsively fits the chart to its available container width.
+    # alphabetical axes on the top/right. The linked scale constraints keep the
+    # marginal bars aligned with the square heatmap cells when Plotly adjusts
+    # subplot domains to fit different container sizes.
     fig.update_yaxes(
         tickmode="array", tickvals=positions, ticktext=character_order,
         range=[len(character_order) - 0.5, -0.5],
+        scaleanchor="y2", scaleratio=1, constrain="domain",
         showticklabels=True, title_text="Player's Character", row=1, col=1,
     )
     fig.update_xaxes(
         autorange="reversed", showticklabels=True, autotickangles=[0, -90],
-        showgrid=True, dtick=50,
+        showgrid=True,
         gridcolor="rgba(128,128,128,0.25)", zeroline=False,
         row=1, col=1,
     )
@@ -121,11 +123,12 @@ def make_character_matchup_chart(
     fig.update_xaxes(
         tickmode="array", tickvals=positions, ticktext=character_order,
         range=[-0.5, len(character_order) - 0.5],
+        scaleanchor="x2", scaleratio=1, constrain="domain",
         showticklabels=True, tickangle=-45, title_text="Opponent's Character",
         row=2, col=2,
     )
     fig.update_yaxes(
-        showticklabels=True, showgrid=True, dtick=50,
+        showticklabels=True, showgrid=True,
         gridcolor="rgba(128,128,128,0.25)", zeroline=False,
         row=2, col=2,
     )
