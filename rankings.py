@@ -232,15 +232,18 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
     _ctx = (tuple(season_sel), ladder_mode, ranked_mode)
     if st.session_state.get("rnk_filter_ctx") != _ctx:
         st.session_state["rnk_min_games"] = _default_min
-        st.session_state["rnk_char_top_n"] = min(20, len(lb))
+        st.session_state["rnk_char_top_n_value"] = min(20, len(lb))
+        st.session_state["rnk_char_top_n_version"] = (
+            st.session_state.get("rnk_char_top_n_version", 0) + 1
+        )
         st.session_state["rnk_filter_ctx"] = _ctx
     else:
         # Streamlit removes widget-owned keys when their view is not rendered.
         # Restore their computed defaults when returning to the leaderboard.
         if "rnk_min_games" not in st.session_state:
             st.session_state["rnk_min_games"] = _default_min
-        if "rnk_char_top_n" not in st.session_state:
-            st.session_state["rnk_char_top_n"] = min(20, len(lb))
+        if "rnk_char_top_n_value" not in st.session_state:
+            st.session_state["rnk_char_top_n_value"] = min(20, len(lb))
 
     # Read slider value from session state so the bubble chart and table
     # can use it before the slider widget is rendered below.
@@ -363,9 +366,19 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
     st.subheader(f"Character Stats")
     max_top_n = len(lb)
     if max_top_n > 2:
+        top_n_default = max(
+            2, min(int(st.session_state["rnk_char_top_n_value"]), max_top_n)
+        )
+        top_n_widget_key = (
+            f'rnk_char_top_n_widget_{st.session_state.get("rnk_char_top_n_version", 0)}'
+        )
+
+        def _sync_char_top_n():
+            st.session_state["rnk_char_top_n_value"] = st.session_state[top_n_widget_key]
+
         top_n_players = st.slider(
-            "Top N players", 2, max_top_n,
-            key="rnk_char_top_n",
+            "Top N players", 2, max_top_n, value=top_n_default,
+            key=top_n_widget_key, on_change=_sync_char_top_n,
             help="Only matches where both players are in the top N by games played are included.",
         )
     else:
