@@ -66,13 +66,50 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
     all_seasons = sorted(m_base["season"].dropna().unique(), key=lambda s: int(s[1:]))
     all_seasons_desc = list(reversed(all_seasons))
 
+    # Build season counts in the current ladder/match-type context. Streamlit
+    # reruns after either radio changes, so these labels stay in sync.
+    count_matches = m_base
+    count_ladder = _LADDER_RAW.get(st.session_state.get("rnk_ladder", "Classic"))
+    if count_ladder:
+        count_matches = count_matches[count_matches["ladder_name"] == count_ladder]
+    count_ranked_mode = st.session_state.get("rnk_ranked", "All")
+    if count_ranked_mode == "Ranked":
+        count_matches = count_matches[count_matches["ranked_flag"] == 1]
+    elif count_ranked_mode == "Unranked":
+        count_matches = count_matches[count_matches["ranked_flag"] == 0]
+    season_game_counts = count_matches["season"].value_counts().to_dict()
+
     # --- Filters ---
     col_s, col_l, col_r = st.columns([1.5, 2.5, 2])
     _ALL_OPT = "All Seasons"
+
+    def _season_option_label(season):
+        games = len(count_matches) if season == _ALL_OPT else season_game_counts.get(season, 0)
+        return f"{season} ({games:,} games)"
+
+    if "rnk_seasons" not in st.session_state:
+        st.session_state["rnk_seasons"] = all_seasons_desc[:1] or [_ALL_OPT]
+    if "rnk_seasons_previous" not in st.session_state:
+        st.session_state["rnk_seasons_previous"] = list(
+            st.session_state["rnk_seasons"]
+        )
+
+    def _sync_leaderboard_seasons():
+        current = list(st.session_state.get("rnk_seasons", []))
+        previous = list(st.session_state.get("rnk_seasons_previous", []))
+        if _ALL_OPT in current and _ALL_OPT not in previous:
+            current = [_ALL_OPT]
+        elif _ALL_OPT in current and any(s != _ALL_OPT for s in current):
+            current = [s for s in current if s != _ALL_OPT]
+        st.session_state["rnk_seasons"] = current
+        st.session_state["rnk_seasons_previous"] = current
+
     with col_s:
         season_sel = st.multiselect(
             "Season", [_ALL_OPT] + all_seasons_desc,
-            default=all_seasons_desc[:1] or [_ALL_OPT], key="rnk_seasons",
+            key="rnk_seasons",
+            format_func=_season_option_label,
+            on_change=_sync_leaderboard_seasons,
             placeholder="Select seasons", label_visibility="collapsed",
         )
     with col_l:

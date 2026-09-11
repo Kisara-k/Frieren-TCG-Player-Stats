@@ -294,19 +294,60 @@ if _main_view == "Player Stats":
             else:
                 st.subheader(f"{player_label}")
 
-                # -- RANKED / LADDER FILTER ------------------------------------------
-                _col_ranked, _col_ladder, _col_self = st.columns([1, 1, 0.5])
-                with _col_ranked:
-                    ranked_mode = st.radio(
-                        "Match type",
-                        options=["All", "Ranked", "Unranked"],
-                        horizontal=True,
-                        key="ranked_filter",
-                        label_visibility="collapsed",
+                # -- SHARED SEASON / LADDER / MATCH-TYPE FILTERS --------------------
+                _LADDER_OPTIONS = ["Classic", "All", "Blitz", "Slow", "Prescience"]
+                _LADDER_RAW = {"Classic": "classic", "Blitz": "blitz", "Slow": "slow", "Prescience": "classic-prescience", "All": None}
+
+                _count_ladder_mode = st.session_state.get("ladder_filter", "Classic")
+                _count_ranked_mode = st.session_state.get("ranked_filter", "All")
+                _count_include_self = st.session_state.get("include_self", False)
+                _pm_count_context = pm
+                _count_ladder_raw = _LADDER_RAW.get(_count_ladder_mode)
+                if _count_ladder_raw is not None:
+                    _pm_count_context = _pm_count_context[_pm_count_context["ladder_name"] == _count_ladder_raw]
+                if _count_ranked_mode == "Ranked":
+                    _pm_count_context = _pm_count_context[_pm_count_context["ranked"] == 1]
+                elif _count_ranked_mode == "Unranked":
+                    _pm_count_context = _pm_count_context[_pm_count_context["ranked"] == 0]
+                if not _count_include_self:
+                    _pm_count_context = _pm_count_context[_pm_count_context["winnerId"] != _pm_count_context["loserId"]]
+
+                _all_seasons = sorted(pm["season"].dropna().unique(), key=lambda s: int(s[1:]))
+                _season_counts = _pm_count_context["season"].value_counts().to_dict()
+                _ALL_SEASONS = "All Seasons"
+
+                def _player_season_label(season):
+                    games = len(_pm_count_context) if season == _ALL_SEASONS else _season_counts.get(season, 0)
+                    return f"{season} ({games:,} games)"
+
+                _player_season_key = f"player_seasons_{confirmed_id}"
+                _player_season_previous_key = f"player_seasons_previous_{confirmed_id}"
+                if _player_season_key not in st.session_state:
+                    st.session_state[_player_season_key] = [_ALL_SEASONS]
+                if _player_season_previous_key not in st.session_state:
+                    st.session_state[_player_season_previous_key] = list(
+                        st.session_state[_player_season_key]
+                    )
+
+                def _sync_player_seasons():
+                    current = list(st.session_state.get(_player_season_key, []))
+                    previous = list(st.session_state.get(_player_season_previous_key, []))
+                    if _ALL_SEASONS in current and _ALL_SEASONS not in previous:
+                        current = [_ALL_SEASONS]
+                    elif _ALL_SEASONS in current and any(s != _ALL_SEASONS for s in current):
+                        current = [s for s in current if s != _ALL_SEASONS]
+                    st.session_state[_player_season_key] = current
+                    st.session_state[_player_season_previous_key] = current
+
+                _col_season, _col_ladder, _col_ranked = st.columns([1.5, 2.5, 2])
+                with _col_season:
+                    selected_season_options = st.multiselect(
+                        "Season", [_ALL_SEASONS] + list(reversed(_all_seasons)),
+                        key=_player_season_key, format_func=_player_season_label,
+                        on_change=_sync_player_seasons,
+                        placeholder="Select seasons", label_visibility="collapsed",
                     )
                 with _col_ladder:
-                    _LADDER_OPTIONS = ["Classic", "All", "Blitz", "Slow", "Prescience"]
-                    _LADDER_RAW = {"Classic": "classic", "Blitz": "blitz", "Slow": "slow", "Prescience": "classic-prescience", "All": None}
                     ladder_mode = st.radio(
                         "Ladder",
                         options=_LADDER_OPTIONS,
@@ -315,9 +356,16 @@ if _main_view == "Player Stats":
                         key="ladder_filter",
                         label_visibility="collapsed",
                     )
-                with _col_self:
-                    include_self = st.checkbox("Include self", value=False, key="include_self")
-
+                with _col_ranked:
+                    with st.container(horizontal=True, vertical_alignment="center", gap="small"):
+                        ranked_mode = st.radio(
+                            "Match type", options=["All", "Ranked", "Unranked"],
+                            horizontal=True, key="ranked_filter", label_visibility="collapsed",
+                            width="content",
+                        )
+                        include_self = st.checkbox(
+                            "Self", value=False, key="include_self", width="content",
+                        )
                 # Apply ladder filter first, then ranked filter
                 _ladder_raw = _LADDER_RAW[ladder_mode]
                 if _ladder_raw is not None:
@@ -335,6 +383,14 @@ if _main_view == "Player Stats":
                 if not include_self:
                     pm_filtered = pm_filtered[pm_filtered["winnerId"] != pm_filtered["loserId"]].copy()
 
+                if not selected_season_options or _ALL_SEASONS in selected_season_options:
+                    selected_seasons = sorted(pm_filtered["season"].dropna().unique(), key=lambda s: int(s[1:]))
+                    season_label = "All Seasons"
+                else:
+                    selected_seasons = [s for s in _all_seasons if s in selected_season_options]
+                    pm_filtered = pm_filtered[pm_filtered["season"].isin(selected_seasons)].copy()
+                    season_label = ", ".join(selected_seasons)
+
                 # Recompute season counts from the filtered set for accurate dropdown labels
                 _filtered_season_counts = (
                     pm_filtered.groupby("season")["result"]
@@ -345,35 +401,21 @@ if _main_view == "Player Stats":
                     .to_dict()
                 ) if not pm_filtered.empty else {}
 
-                seasons = list(_filtered_season_counts.keys())
+                seasons = selected_seasons
                 total_games = sum(_filtered_season_counts.values())
 
                 _season_breakdown = "  ·  ".join(f"{s}: {n}" for s, n in _filtered_season_counts.items())
                 st.caption(f"Total matches: {total_games}  |  {_season_breakdown}")
 
-                # Dropdown labels built from the filtered season counts
-                all_option = f"All  ({total_games} games)"
-                season_options = [all_option] + [f"{s}  ({n} games)" for s, n in reversed(list(_filtered_season_counts.items()))]
-
-                def filter_by_season_option(option: str) -> pd.DataFrame:
-                    if option == all_option:
-                        return pm_filtered
-                    season_key = option.split("  ")[0]
-                    return pm_filtered[pm_filtered["season"] == season_key]
-
-                def season_display_label(option: str) -> str:
-                    return "All Seasons" if option == all_option else option.split("  ")[0]
-
+                if pm_filtered.empty:
+                    st.info("No matches for this selection.")
+                    st.stop()
 
                 # -- SECTION 1: OVERALL MATCHUPS ----------------------------------
                 st.header("Overall Matchups")
 
-                season_sel_matchup = st.selectbox(
-                    "Season filter", season_options, key="matchup_season",
-                    label_visibility="collapsed",
-                )
-                df_matchup = filter_by_season_option(season_sel_matchup)
-                season_label_matchup = season_display_label(season_sel_matchup)
+                df_matchup = pm_filtered
+                season_label_matchup = season_label
 
                 overall = matchup_stats(df_matchup)
 
@@ -437,12 +479,7 @@ if _main_view == "Player Stats":
 
                 # -- SECTION 2: PER-SEASON BREAKDOWN ------------------------------
                 st.header("Season & Weekly Breakdown")
-                st.caption("Select **All Seasons** for a season-by-season overview, or pick a specific season to drill down by **week**.")
-
-                season_sel_breakdown = st.selectbox(
-                    "Season", season_options, key="breakdown_season",
-                    label_visibility="collapsed",
-                )
+                st.caption("A single selected season shows its weekly breakdown; multiple seasons show a season-by-season overview.")
 
                 top_n_season = 6
 
@@ -581,8 +618,13 @@ if _main_view == "Player Stats":
                     return fig
 
 
-                if season_sel_breakdown == all_option:
-                    _sov_order = sorted(pm_filtered["season"].unique(), key=lambda s: int(s[1:])) if not pm_filtered.empty else []
+                _show_season_overview = (
+                    not selected_season_options
+                    or _ALL_SEASONS in selected_season_options
+                    or len(selected_seasons) != 1
+                )
+                if _show_season_overview:
+                    _sov_order = selected_seasons
                     season_overview = _build_period_overview(pm_filtered, "season", _sov_order)
                     st.plotly_chart(
                         _make_overview_chart(season_overview, "season", _sov_order, f"Season Overview - {player_label}"),
@@ -595,8 +637,8 @@ if _main_view == "Player Stats":
                     )
 
                 else:
-                    _sel_season = season_display_label(season_sel_breakdown)
-                    _df_week = filter_by_season_option(season_sel_breakdown).copy()
+                    _sel_season = selected_seasons[0]
+                    _df_week = pm_filtered.copy()
 
                     if _df_week.empty:
                         st.info(f"No matches found for {_sel_season}.")
@@ -639,12 +681,8 @@ if _main_view == "Player Stats":
                 # -- SECTION 3: CHARACTER MATCHUPS --------------------------------
                 st.header("Character Matchups")
 
-                season_sel_heatmap = st.selectbox(
-                    "Season filter", season_options, key="heatmap_season",
-                    label_visibility="collapsed",
-                )
-                df_heatmap = filter_by_season_option(season_sel_heatmap)
-                season_label_heatmap = season_display_label(season_sel_heatmap)
+                df_heatmap = pm_filtered
+                season_label_heatmap = season_label
 
 
                 def make_char_pie(df_col: pd.Series, title: str, opp_strs: list | None = None) -> go.Figure:
