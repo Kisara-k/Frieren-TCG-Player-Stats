@@ -214,7 +214,7 @@ st.title("Frieren TCG Player Stats and Leaderboard")
 st.caption(f"Last updated: {_last_updated_str}")
 
 _main_view = st.radio(
-    "View", ["Player Stats", "Leaderboard"],
+    "View", ["Leaderboard", "Player Stats"],
     horizontal=True, key="main_view", label_visibility="collapsed",
 )
 
@@ -479,7 +479,7 @@ if _main_view == "Player Stats":
 
                 # -- SECTION 2: PER-SEASON BREAKDOWN ------------------------------
                 st.header("Season & Weekly Breakdown")
-                st.caption("A single selected season shows its weekly breakdown; multiple seasons show a season-by-season overview.")
+                # st.caption("A single selected season shows its weekly breakdown; multiple seasons show a season-by-season overview.")
 
                 top_n_season = 6
 
