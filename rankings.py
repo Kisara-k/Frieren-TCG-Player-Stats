@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+from html import escape
 from matchup_chart import make_character_matchup_chart
 
 _LADDER_OPTIONS = ["Classic", "All", "Blitz", "Slow", "Prescience"]
@@ -42,6 +43,70 @@ def _top_players_str(m, char_id, player_label_map, top_n=4):
     line1 = "  ·  ".join(tops[:2])
     line2 = "  ·  ".join(tops[2:4]) if len(tops) > 2 else ""
     return f"{line1}<br>{line2}" if line2 else line1
+
+
+def _hex_to_hsl_capped(hex_color, max_l=60):
+    """Keep character colors readable against Plotly's light hover background."""
+    h = hex_color.lstrip("#")
+    r, g, b = int(h[0:2], 16) / 255, int(h[2:4], 16) / 255, int(h[4:6], 16) / 255
+    cmax, cmin = max(r, g, b), min(r, g, b)
+    delta = cmax - cmin
+    lightness = (cmax + cmin) / 2
+    saturation = 0.0 if delta == 0 else delta / (1 - abs(2 * lightness - 1))
+    if delta == 0:
+        hue = 0.0
+    elif cmax == r:
+        hue = 60 * (((g - b) / delta) % 6)
+    elif cmax == g:
+        hue = 60 * ((b - r) / delta + 2)
+    else:
+        hue = 60 * ((r - g) / delta + 4)
+    capped = min(lightness, max_l / 100)
+    if lightness > capped:
+        saturation *= capped / lightness
+    return f"hsl({hue:.0f},{saturation * 100:.0f}%,{capped * 100:.0f}%)"
+
+
+def _char_picks_str(character_ids, char_map, char_color_map, top_n=4):
+    counts = character_ids.dropna().map(char_map).dropna().value_counts()
+    total = int(counts.sum())
+    if not total:
+        return "-"
+    return "  ·  ".join(
+        f'<span style="color:{_hex_to_hsl_capped(char_color_map.get(name, "#AAAAAA"))}">'
+        f'<b>{escape(str(name))}</b> {count / total * 100:.0f}%</span>'
+        for name, count in counts.iloc[:top_n].items()
+    )
+
+
+def _player_activity_tooltip(m, player_id, player_label_map, char_map, char_color_map):
+    """Build a player's pick summary and five most-played opponent lines."""
+    wins = m[m["winnerId"] == player_id][
+        ["winnerCharacterId", "loserId", "loserCharacterId"]
+    ].rename(columns={
+        "winnerCharacterId": "player_char", "loserId": "opp_id",
+        "loserCharacterId": "opp_char",
+    })
+    losses = m[m["loserId"] == player_id][
+        ["loserCharacterId", "winnerId", "winnerCharacterId"]
+    ].rename(columns={
+        "loserCharacterId": "player_char", "winnerId": "opp_id",
+        "winnerCharacterId": "opp_char",
+    })
+    perspective = pd.concat([wins, losses], ignore_index=True)
+    player_picks = _char_picks_str(
+        perspective["player_char"], char_map, char_color_map
+    )
+    lines = [f"<b>Top picks:</b> {player_picks}", "<b>Top opponents:</b>"]
+    for opp_id, games in perspective["opp_id"].value_counts().iloc[:5].items():
+        opp_name = escape(str(player_label_map.get(opp_id, opp_id)))
+        opp_picks = _char_picks_str(
+            perspective.loc[perspective["opp_id"] == opp_id, "opp_char"],
+            char_map, char_color_map,
+        )
+        game_label = "game" if games == 1 else "games"
+        lines.append(f"{int(games)} {game_label} · <b>{opp_name}</b> · {opp_picks}")
+    return "<br>".join(lines)
 
 
 def _char_meta(m, char_map, char_color_map):
@@ -181,26 +246,36 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
 
     # ── Activity bar chart (top 20) ────────────────────────────────────────────
     top20 = lb.head(20).copy()
+    top20["matchup_tooltip"] = top20["player_id"].map(
+        lambda player_id: _player_activity_tooltip(
+            m_view, player_id, player_label_map, char_map, char_color_map
+        )
+    )
+    activity_customdata = top20[
+        ["total_games", "wins", "losses", "win_rate", "matchup_tooltip"]
+    ].values
     fig_act = go.Figure([
         go.Bar(
-            name="Ranked", x=top20["player_name"], y=top20["ranked_games"],
-            marker_color="#3498db",
-            customdata=top20[["total_games", "wins", "losses", "win_rate"]].values,
+            name="Wins", x=top20["player_name"], y=top20["wins"],
+            marker_color="#2ecc71", text=top20["wins"], textposition="inside",
+            customdata=activity_customdata,
             hovertemplate=(
                 "<b>%{x}</b><br>"
-                "Ranked: %{y}  |  Total: %{customdata[0]}<br>"
-                "Wins %{customdata[1]}  |  Losses %{customdata[2]}  |  WR: %{customdata[3]}%"
+                "Wins %{customdata[1]}  |  Losses %{customdata[2]}  |  "
+                "Total %{customdata[0]}  |  WR: %{customdata[3]}%<br>"
+                "%{customdata[4]}"
                 "<extra></extra>"
             ),
         ),
         go.Bar(
-            name="Unranked", x=top20["player_name"], y=top20["unranked_games"],
-            marker_color="#95a5a6",
-            customdata=top20[["total_games", "wins", "losses", "win_rate"]].values,
+            name="Losses", x=top20["player_name"], y=top20["losses"],
+            marker_color="#e74c3c", text=top20["losses"], textposition="inside",
+            customdata=activity_customdata,
             hovertemplate=(
                 "<b>%{x}</b><br>"
-                "Unranked: %{y}  |  Total: %{customdata[0]}<br>"
-                "Wins %{customdata[1]}  |  Losses %{customdata[2]}  |  WR: %{customdata[3]}%"
+                "Wins %{customdata[1]}  |  Losses %{customdata[2]}  |  "
+                "Total %{customdata[0]}  |  WR: %{customdata[3]}%<br>"
+                "%{customdata[4]}"
                 "<extra></extra>"
             ),
         ),
@@ -209,7 +284,7 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
         title=f"Top 20 Most Active Players - {season_label}",
         barmode="stack", xaxis_title="Player", yaxis_title="Games",
         xaxis={"categoryorder": "array", "categoryarray": top20["player_name"].tolist()},
-        legend_title_text="Match Type", hoverlabel=dict(align="left"),
+        legend_title_text="Result", hoverlabel=dict(align="left"),
     )
     st.plotly_chart(fig_act, width='stretch')
 
