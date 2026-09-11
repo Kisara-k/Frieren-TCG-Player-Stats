@@ -234,13 +234,19 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
         st.session_state["rnk_min_games"] = _default_min
         st.session_state["rnk_char_top_n"] = min(20, len(lb))
         st.session_state["rnk_filter_ctx"] = _ctx
-    elif "rnk_char_top_n" not in st.session_state:
-        st.session_state["rnk_char_top_n"] = min(20, len(lb))
+    else:
+        # Streamlit removes widget-owned keys when their view is not rendered.
+        # Restore their computed defaults when returning to the leaderboard.
+        if "rnk_min_games" not in st.session_state:
+            st.session_state["rnk_min_games"] = _default_min
+        if "rnk_char_top_n" not in st.session_state:
+            st.session_state["rnk_char_top_n"] = min(20, len(lb))
 
     # Read slider value from session state so the bubble chart and table
     # can use it before the slider widget is rendered below.
     min_g = int(st.session_state.get("rnk_min_games", _default_min))
     min_g = max(1, min(min_g, max_g))
+    st.session_state["rnk_min_games"] = min_g
 
     st.subheader(f"Player Rankings")
 
