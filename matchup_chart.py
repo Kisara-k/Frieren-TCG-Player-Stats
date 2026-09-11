@@ -76,21 +76,33 @@ def make_character_matchup_chart(
         hovertemplate="%{hovertext}<extra></extra>",
     ), row=1, col=2)
 
+    bar_label_style = dict(
+        texttemplate="<b>%{text:d}</b>",
+        textposition="inside",
+        textangle=0,
+        constraintext="none",
+        insidetextanchor="middle",
+        insidetextfont=dict(color="white", size=10),
+    )
     fig.add_trace(go.Bar(
         x=row_wins.values, y=positions, orientation="h",
         marker_color="#2ecc71", name="Wins", legendgroup="Wins",
+        text=row_wins.values, **bar_label_style,
     ), row=1, col=1)
     fig.add_trace(go.Bar(
         x=row_losses.values, y=positions, orientation="h",
         marker_color="#e74c3c", name="Losses", legendgroup="Losses",
+        text=row_losses.values, **bar_label_style,
     ), row=1, col=1)
     fig.add_trace(go.Bar(
         x=positions, y=col_wins.values,
         marker_color="#2ecc71", name="Wins", legendgroup="Wins", showlegend=False,
+        text=col_wins.values, **bar_label_style,
     ), row=2, col=2)
     fig.add_trace(go.Bar(
         x=positions, y=col_losses.values,
         marker_color="#e74c3c", name="Losses", legendgroup="Losses", showlegend=False,
+        text=col_losses.values, **bar_label_style,
     ), row=2, col=2)
 
     # The marginal plots label the left/bottom; the heatmap repeats the same
