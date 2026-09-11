@@ -122,8 +122,8 @@ def _char_meta(m, char_map, char_color_map):
 
 
 def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, char_map, char_color_map):
-    # Base: exclude self-matches, add derived columns
-    m_base = matches[matches["winnerId"] != matches["loserId"]].copy()
+    # Base: add derived columns; the filter below excludes self-matches by default.
+    m_base = matches.copy()
     m_base["season"] = m_base["ladderResetId"].map(reset_to_season)
     m_base["ladder_name"] = m_base["ladderResetId"].map(reset_to_ladder_name)
     m_base["ranked_flag"] = m_base["ranked"].notna().astype(int)
@@ -134,6 +134,8 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
     # Build season counts in the current ladder/match-type context. Streamlit
     # reruns after either radio changes, so these labels stay in sync.
     count_matches = m_base
+    if not st.session_state.get("rnk_include_self", False):
+        count_matches = count_matches[count_matches["winnerId"] != count_matches["loserId"]]
     count_ladder = _LADDER_RAW.get(st.session_state.get("rnk_ladder", "Classic"))
     if count_ladder:
         count_matches = count_matches[count_matches["ladder_name"] == count_ladder]
@@ -183,10 +185,14 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
             key="rnk_ladder", label_visibility="collapsed",
         )
     with col_r:
-        ranked_mode = st.radio(
-            "Match type", ["All", "Ranked", "Unranked"], index=1, horizontal=True,
-            key="rnk_ranked", label_visibility="collapsed",
-        )
+        with st.container(horizontal=True, vertical_alignment="center", gap="small"):
+            ranked_mode = st.radio(
+                "Match type", ["All", "Ranked", "Unranked"], index=1, horizontal=True,
+                key="rnk_ranked", label_visibility="collapsed", width="content",
+            )
+            include_self = st.checkbox(
+                "Self", value=False, key="rnk_include_self", width="content",
+            )
 
     # Apply ladder + ranked filters (season applied separately below)
     ladder_raw = _LADDER_RAW[ladder_mode]
@@ -195,6 +201,8 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
         m_filtered = m_filtered[m_filtered["ranked_flag"] == 1]
     elif ranked_mode == "Unranked":
         m_filtered = m_filtered[m_filtered["ranked_flag"] == 0]
+    if not include_self:
+        m_filtered = m_filtered[m_filtered["winnerId"] != m_filtered["loserId"]]
 
     if not season_sel or _ALL_OPT in season_sel:
         m_view = m_filtered
@@ -227,9 +235,9 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
             _default_min = _t
             break
 
-    # Reset slider when the filter context (season/ladder/ranked) changes so
+    # Reset slider when the filter context (season/ladder/ranked/self) changes so
     # the stale value from the previous context isn't used.
-    _ctx = (tuple(season_sel), ladder_mode, ranked_mode)
+    _ctx = (tuple(season_sel), ladder_mode, ranked_mode, include_self)
     if st.session_state.get("rnk_filter_ctx") != _ctx:
         st.session_state["rnk_min_games"] = _default_min
         st.session_state["rnk_char_top_n_value"] = min(20, len(lb))
