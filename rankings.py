@@ -137,7 +137,7 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
     count_ladder = _LADDER_RAW.get(st.session_state.get("rnk_ladder", "Classic"))
     if count_ladder:
         count_matches = count_matches[count_matches["ladder_name"] == count_ladder]
-    count_ranked_mode = st.session_state.get("rnk_ranked", "All")
+    count_ranked_mode = st.session_state.get("rnk_ranked", "Ranked")
     if count_ranked_mode == "Ranked":
         count_matches = count_matches[count_matches["ranked_flag"] == 1]
     elif count_ranked_mode == "Unranked":
@@ -184,7 +184,7 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
         )
     with col_r:
         ranked_mode = st.radio(
-            "Match type", ["All", "Ranked", "Unranked"], horizontal=True,
+            "Match type", ["All", "Ranked", "Unranked"], index=1, horizontal=True,
             key="rnk_ranked", label_visibility="collapsed",
         )
 
