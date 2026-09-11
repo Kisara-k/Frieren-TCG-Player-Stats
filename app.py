@@ -495,7 +495,7 @@ if _main_view == "Player Stats":
                     fig.update_layout(title=title, barmode="stack", legend_title_text="", hoverlabel=dict(align="left"))
                     fig.update_xaxes(categoryorder="array", categoryarray=period_order)
                     fig.update_yaxes(title_text="Games", secondary_y=False)
-                    fig.update_yaxes(title_text="Win Rate (%)", range=[0, 110], secondary_y=True, gridcolor=_primary_rgba, griddash="dot")
+                    fig.update_yaxes(title_text="Win Rate (%)", range=[0, 110], secondary_y=True, showgrid=False)
                     return fig
 
 
