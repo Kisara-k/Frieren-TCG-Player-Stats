@@ -89,7 +89,8 @@ def make_character_matchup_chart(
         showticklabels=True, title_text="Player's Character", row=1, col=1,
     )
     fig.update_xaxes(
-        autorange="reversed", showticklabels=True, showgrid=True, dtick=50,
+        autorange="reversed", showticklabels=True, autotickangles=[0, -90],
+        showgrid=True, dtick=50,
         gridcolor="rgba(128,128,128,0.25)", zeroline=False,
         row=1, col=1,
     )
