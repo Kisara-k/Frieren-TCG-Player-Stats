@@ -70,9 +70,10 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
     col_s, col_l, col_r = st.columns([1.5, 2.5, 2])
     _ALL_OPT = "All Seasons"
     with col_s:
-        season_sel = st.selectbox(
+        season_sel = st.multiselect(
             "Season", [_ALL_OPT] + all_seasons_desc,
-            index=1 if all_seasons_desc else 0, key="rnk_season", label_visibility="collapsed",
+            default=all_seasons_desc[:1] or [_ALL_OPT], key="rnk_seasons",
+            placeholder="Select seasons", label_visibility="collapsed",
         )
     with col_l:
         ladder_mode = st.radio(
@@ -93,12 +94,14 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
     elif ranked_mode == "Unranked":
         m_filtered = m_filtered[m_filtered["ranked_flag"] == 0]
 
-    if season_sel == _ALL_OPT:
+    if not season_sel or _ALL_OPT in season_sel:
         m_view = m_filtered
         season_label = "All Seasons"
+        selected_seasons = all_seasons
     else:
-        m_view = m_filtered[m_filtered["season"] == season_sel]
-        season_label = season_sel
+        selected_seasons = [s for s in all_seasons if s in season_sel]
+        m_view = m_filtered[m_filtered["season"].isin(selected_seasons)]
+        season_label = ", ".join(selected_seasons)
 
     if m_view.empty:
         st.info("No matches for this selection.")
@@ -124,10 +127,13 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
 
     # Reset slider when the filter context (season/ladder/ranked) changes so
     # the stale value from the previous context isn't used.
-    _ctx = (season_sel, ladder_mode, ranked_mode)
+    _ctx = (tuple(season_sel), ladder_mode, ranked_mode)
     if st.session_state.get("rnk_filter_ctx") != _ctx:
         st.session_state["rnk_min_games"] = _default_min
+        st.session_state["rnk_char_top_n"] = min(20, len(lb))
         st.session_state["rnk_filter_ctx"] = _ctx
+    elif "rnk_char_top_n" not in st.session_state:
+        st.session_state["rnk_char_top_n"] = min(20, len(lb))
 
     # Read slider value from session state so the bubble chart and table
     # can use it before the slider widget is rendered below.
@@ -203,8 +209,8 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
         },
     )
 
-    # ── Season activity heatmap (All Seasons only) ─────────────────────────────
-    if season_sel == _ALL_OPT and len(all_seasons) > 1:
+    # ── Season activity heatmap (multi-season selections) ─────────────────────
+    if len(selected_seasons) > 1:
         st.subheader("Season Activity - Top 20 Players")
         top_pids = set(lb.head(20)["player_id"])
         w_s = m_filtered[m_filtered["winnerId"].isin(top_pids)][["winnerId", "season"]].rename(columns={"winnerId": "player_id"})
@@ -214,7 +220,7 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
         hm_pivot = (
             both.groupby(["player_name", "season"]).size()
             .unstack(fill_value=0)
-            .reindex(columns=all_seasons, fill_value=0)
+            .reindex(columns=selected_seasons, fill_value=0)
         )
         hm_pivot = hm_pivot.loc[hm_pivot.sum(axis=1).sort_values(ascending=False).index]
         fig_hm = go.Figure(go.Heatmap(
@@ -237,8 +243,27 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
 
     # ── Character meta ─────────────────────────────────────────────────────────
     st.subheader(f"Character Stats")
-    cs = _char_meta(m_view, char_map, char_color_map)
-    cs["top_players"] = [_top_players_str(m_view, cid, player_label_map) for cid in cs["char_id"]]
+    max_top_n = len(lb)
+    if max_top_n > 2:
+        top_n_players = st.slider(
+            "Top N players", 2, max_top_n,
+            key="rnk_char_top_n",
+            help="Only matches where both players are in the top N by games played are included.",
+        )
+    else:
+        top_n_players = max_top_n
+    top_player_ids = set(lb.head(top_n_players)["player_id"])
+    m_char = m_view[
+        m_view["winnerId"].isin(top_player_ids)
+        & m_view["loserId"].isin(top_player_ids)
+    ].copy()
+    # st.caption(
+    #     f"Character stats include {len(m_char):,} games where both players are in "
+    #     f"the top {top_n_players} by games played."
+    # )
+
+    cs = _char_meta(m_char, char_map, char_color_map)
+    cs["top_players"] = [_top_players_str(m_char, cid, player_label_map) for cid in cs["char_id"]]
 
     if cs.empty:
         st.info("No character data for this selection.")
@@ -274,11 +299,12 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
         fig_wr_char = go.Figure(go.Bar(
             x=cs_wr["win_rate"], y=cs_wr["name"], orientation="h",
             marker_color=cs_wr["color"],
-            customdata=cs_wr[["wins", "losses", "total"]].values,
+            customdata=cs_wr[["wins", "losses", "total", "top_players"]].values,
             hovertemplate=(
                 "<b>%{y}</b><br>"
                 "Win Rate: %{x}%<br>"
-                "Wins %{customdata[0]}  |  Losses %{customdata[1]}  |  Total %{customdata[2]}"
+                "Wins %{customdata[0]}  |  Losses %{customdata[1]}  |  Total %{customdata[2]}<br>"
+                "%{customdata[3]}"
                 "<extra></extra>"
             ),
             text=cs_wr["win_rate"].astype(str) + "%",
@@ -295,11 +321,11 @@ def render(matches, player_label_map, reset_to_season, reset_to_ladder_name, cha
 
     # Character matchup win rate matrix. Add both players' perspectives so the
     # shared chart can aggregate wins/losses identically to the player view.
-    matchup_wins = m_view[["winnerCharacterId", "loserCharacterId"]].rename(columns={
+    matchup_wins = m_char[["winnerCharacterId", "loserCharacterId"]].rename(columns={
         "winnerCharacterId": "player_char_id", "loserCharacterId": "opp_char_id",
     })
     matchup_wins["result"] = "Win"
-    matchup_losses = m_view[["loserCharacterId", "winnerCharacterId"]].rename(columns={
+    matchup_losses = m_char[["loserCharacterId", "winnerCharacterId"]].rename(columns={
         "loserCharacterId": "player_char_id", "winnerCharacterId": "opp_char_id",
     })
     matchup_losses["result"] = "Loss"
